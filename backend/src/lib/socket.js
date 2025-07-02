@@ -7,26 +7,33 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:5173"],
+    origin: ["http://localhost:5173", "https://your-frontend.onrender.com"], // ✅ Add frontend Render URL here too
   },
 });
+
+const userSocketMap = {};
 
 export function getReceiverSocketId(userId) {
   return userSocketMap[userId];
 }
-//store online users
-const userSocketMap = {};
+
 io.on("connection", (socket) => {
-  console.log("A user connected", socket.id);
+  console.log("🔌 A user connected:", socket.id);
 
   const userId = socket.handshake.query.userId;
-  if (userId) userSocketMap[userId] = socket.id;
+  console.log("👉 userId from frontend:", userId); // ✅ Optional debug
 
-  // io.emit() is used to send events to all the connected clients
+  if (!userId) {
+    console.error("❌ No userId provided in socket handshake");
+    return;
+  }
+
+  userSocketMap[userId] = socket.id;
+
   io.emit("getOnlineUsers", Object.keys(userSocketMap));
 
   socket.on("disconnect", () => {
-    console.log("A user disconnected", socket.id);
+    console.log("❌ A user disconnected:", socket.id);
     delete userSocketMap[userId];
     io.emit("getOnlineUsers", Object.keys(userSocketMap));
   });
