@@ -21,11 +21,41 @@ const PORT = process.env.PORT || 5000;
 console.log("🔍 Current directory:", __dirname);
 console.log("🔍 Process cwd:", process.cwd());
 
-// Simple CORS configuration
-app.use(cors({
-  origin: true, // Allow all origins for now
+// CORS configuration for production with credentials
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = process.env.NODE_ENV === "production" 
+      ? [
+          "https://chatapp-u3zb.onrender.com",
+          "https://chatapp1-0gwj.onrender.com",
+          "https://chatapp-0gwj.onrender.com",
+          "https://chatapp.onrender.com"
+        ]
+      : ["http://localhost:3000", "http://localhost:5173", "http://localhost:4173", "http://localhost:5001"];
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log(`🚫 CORS blocked origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
-}));
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
+  optionsSuccessStatus: 200 // Some legacy browsers choke on 204
+};
+
+app.use(cors(corsOptions));
+
+// CORS debugging middleware
+app.use((req, res, next) => {
+  console.log(`🌐 ${req.method} ${req.path} - Origin: ${req.headers.origin || 'No origin'} - User-Agent: ${req.headers['user-agent']?.substring(0, 50) || 'Unknown'}`);
+  next();
+});
 
 // Middleware
 app.use(express.json({ limit: '20mb' }));
@@ -108,6 +138,27 @@ if (process.env.NODE_ENV === "production") {
     console.error("❌ Error setting up static files:", error);
   }
 }
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  if (err.message === 'Not allowed by CORS') {
+    console.error(`🚫 CORS Error: ${req.method} ${req.path} from origin ${req.headers.origin}`);
+    return res.status(403).json({
+      error: 'CORS Error',
+      message: 'Origin not allowed',
+      origin: req.headers.origin,
+      allowedOrigins: process.env.NODE_ENV === "production" 
+        ? ["https://chatapp-u3zb.onrender.com", "https://chatapp1-0gwj.onrender.com", "https://chatapp-0gwj.onrender.com", "https://chatapp.onrender.com"]
+        : ["http://localhost:3000", "http://localhost:5173", "http://localhost:4173", "http://localhost:5001"]
+    });
+  }
+  
+  console.error(`❌ Server Error: ${err.message}`);
+  res.status(500).json({
+    error: 'Internal Server Error',
+    message: err.message
+  });
+});
 
 // Start server
 const startServer = async () => {
