@@ -2,6 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 import { connectDB } from "./lib/db.js";
 import cookieParser from "cookie-parser";
 import authRoutes from "./routes/auth.route.js";
@@ -15,6 +16,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = process.env.PORT || 5000;
+
+// Debug: Log current directory structure
+console.log("🔍 Current directory:", __dirname);
+console.log("🔍 Process cwd:", process.cwd());
 
 // Simple CORS configuration
 app.use(cors({
@@ -33,19 +38,74 @@ app.use("/api/messages", messageRoutes);
 
 // Health check endpoint
 app.get("/health", (req, res) => {
-  res.json({ status: "OK", timestamp: new Date().toISOString() });
+  res.json({ 
+    status: "OK", 
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    backendDir: __dirname,
+    cwd: process.cwd()
+  });
 });
 
 // Serve static files in production
 if (process.env.NODE_ENV === "production") {
   try {
-    app.use(express.static(path.join(__dirname, "../frontend/dist")));
+    console.log("🚀 Setting up static file serving for production...");
     
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
+    // List possible paths and check what exists
+    const possiblePaths = [
+      path.join(__dirname, "../frontend/dist"),
+      path.join(__dirname, "../../frontend/dist"),
+      path.join(__dirname, "../../../frontend/dist"),
+      path.join(process.cwd(), "frontend/dist"),
+      path.join(process.cwd(), "../frontend/dist")
+    ];
+    
+    console.log("🔍 Checking possible frontend paths:");
+    possiblePaths.forEach((testPath, index) => {
+      try {
+        const exists = fs.existsSync(testPath);
+        console.log(`  ${index + 1}. ${testPath} - ${exists ? '✅ EXISTS' : '❌ NOT FOUND'}`);
+        if (exists) {
+          try {
+            const files = fs.readdirSync(testPath);
+            console.log(`     Contents: ${files.join(', ')}`);
+          } catch (e) {
+            console.log(`     Error reading contents: ${e.message}`);
+          }
+        }
+      } catch (e) {
+        console.log(`  ${index + 1}. ${testPath} - ❌ ERROR: ${e.message}`);
+      }
     });
+    
+    // Find the correct path
+    let staticPath = null;
+    for (const testPath of possiblePaths) {
+      try {
+        if (fs.existsSync(testPath) && fs.existsSync(path.join(testPath, "index.html"))) {
+          staticPath = testPath;
+          console.log(`✅ Found frontend dist at: ${testPath}`);
+          break;
+        }
+      } catch (e) {
+        console.log(`❌ Error checking path: ${testPath} - ${e.message}`);
+      }
+    }
+    
+    if (staticPath) {
+      app.use(express.static(staticPath));
+      
+      app.get("*", (req, res) => {
+        res.sendFile(path.join(staticPath, "index.html"));
+      });
+      console.log("✅ Static files configured successfully");
+    } else {
+      console.log("⚠️ Frontend dist folder not found, skipping static file serving");
+      console.log("💡 This means the frontend build may not have completed successfully");
+    }
   } catch (error) {
-    console.error("Error serving static files:", error);
+    console.error("❌ Error setting up static files:", error);
   }
 }
 
