@@ -20,32 +20,30 @@ export const useChatStore = create(
         console.log("📥 getMessages called for userId:", userId);
         set({ isMessagesLoading: true });
         try {
-          // First try to get messages from localStorage
-          const storedMessages = get().messages.filter(
+          // First try to get messages from localStorage for this specific conversation
+          const allStoredMessages = get().messages;
+          const conversationMessages = allStoredMessages.filter(
             msg => (msg.senderId === userId || msg.receiverId === userId)
           );
-          console.log("💾 Found stored messages:", storedMessages.length);
+          console.log("💾 Found stored messages for this conversation:", conversationMessages.length);
           
-          if (storedMessages.length > 0) {
-            // Use stored messages first for instant display
-            set({ messages: storedMessages });
+          if (conversationMessages.length > 0) {
+            // Use stored messages for this conversation first for instant display
+            set({ messages: conversationMessages });
             console.log("✅ Using stored messages for instant display");
           }
           
-          // Then fetch fresh messages from API
-          console.log("🌐 Fetching fresh messages from API...");
+          // Then fetch fresh messages from API for this specific conversation
+          console.log("🌐 Fetching fresh messages from API for user:", userId);
           const res = await axiosInstance.get(`/messages/${userId}`);
           const freshMessages = Array.isArray(res.data) ? res.data : [];
           console.log("📡 Received fresh messages:", freshMessages.length);
           
-          // Merge with existing messages, avoiding duplicates
-          const existingMessages = get().messages.filter(
-            msg => !(msg.senderId === userId || msg.receiverId === userId)
-          );
-          const allMessages = [...existingMessages, ...freshMessages];
-          console.log("🔄 Merged messages:", allMessages.length);
+          // Replace the messages with only the conversation messages
+          // Don't merge with other conversations - each chat should be separate
+          set({ messages: freshMessages });
+          console.log("🔄 Set messages for this conversation:", freshMessages.length);
           
-          set({ messages: allMessages });
         } catch (error) {
           console.error("❌ Error in getMessages:", error);
           const message = error.response?.data?.message || "Failed to fetch messages";
@@ -84,10 +82,10 @@ export const useChatStore = create(
           const res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, messageData);
           console.log("✅ Message sent successfully:", res.data);
           
-          // ✅ Ensure messages is always an array
+          // ✅ Add the new message to the current conversation
           const safeMessages = Array.isArray(messages) ? messages : [];
           const newMessages = [...safeMessages, res.data];
-          console.log("📝 Updated messages array:", newMessages);
+          console.log("📝 Updated messages array for this conversation:", newMessages);
           
           set({ messages: newMessages });
         } catch (error) {
@@ -99,6 +97,26 @@ export const useChatStore = create(
       // ✅ Add message to store (for real-time updates)
       addMessage: (newMessage) => {
         const currentMessages = get().messages;
+        const { selectedUser } = get();
+        
+        // Only add message if it belongs to the current conversation
+        if (!selectedUser) {
+          console.log("⚠️ No selected user, skipping message add");
+          return;
+        }
+        
+        const isMessageForCurrentConversation = 
+          (newMessage.senderId === selectedUser._id || newMessage.receiverId === selectedUser._id);
+        
+        if (!isMessageForCurrentConversation) {
+          console.log("⚠️ Message not for current conversation, skipping:", {
+            messageSender: newMessage.senderId,
+            messageReceiver: newMessage.receiverId,
+            selectedUser: selectedUser._id
+          });
+          return;
+        }
+        
         const safeMessages = Array.isArray(currentMessages) ? currentMessages : [];
         
         // Check if message already exists to avoid duplicates
@@ -106,6 +124,7 @@ export const useChatStore = create(
         if (!messageExists) {
           const updatedMessages = [...safeMessages, newMessage];
           set({ messages: updatedMessages });
+          console.log("✅ Added new message to current conversation:", newMessage._id);
           
           // ✅ Add notification for new message (call directly to avoid recursion)
           const { authUser } = useAuthStore.getState();
@@ -152,6 +171,8 @@ export const useChatStore = create(
               });
             }
           }
+        } else {
+          console.log("⚠️ Message already exists, skipping duplicate:", newMessage._id);
         }
       },
 
@@ -209,10 +230,15 @@ export const useChatStore = create(
         const { messages } = get();
         const safeMessages = Array.isArray(messages) ? messages : [];
         
+        // Filter messages for this specific conversation
         const userMessages = safeMessages.filter(
           msg => (msg.senderId === userId || msg.receiverId === userId)
         );
-        return userMessages.length > 0 ? userMessages[userMessages.length - 1] : null;
+        
+        const lastMessage = userMessages.length > 0 ? userMessages[userMessages.length - 1] : null;
+        console.log(`📝 Last message for user ${userId}:`, lastMessage ? lastMessage.text : 'None');
+        
+        return lastMessage;
       },
 
       // ✅ Mark messages as read for a specific user
@@ -220,6 +246,7 @@ export const useChatStore = create(
         const currentMessages = get().messages;
         const safeMessages = Array.isArray(currentMessages) ? currentMessages : [];
         
+        // Only mark messages as read for the current conversation
         const updatedMessages = safeMessages.map(msg => {
           if (msg.receiverId === userId && !msg.read) {
             return { ...msg, read: true };
@@ -228,6 +255,7 @@ export const useChatStore = create(
         });
         
         set({ messages: updatedMessages });
+        console.log(`✅ Marked messages as read for user: ${userId}`);
         
         // ✅ Also mark notifications as read (call directly to avoid recursion)
         const currentNotifications = get().notifications;
@@ -248,10 +276,14 @@ export const useChatStore = create(
       clearUserMessages: (userId) => {
         const currentMessages = get().messages;
         const safeMessages = Array.isArray(currentMessages) ? currentMessages : [];
+        
+        // Only clear messages for this specific conversation
         const filteredMessages = safeMessages.filter(
           msg => !(msg.senderId === userId || msg.receiverId === userId)
         );
+        
         set({ messages: filteredMessages });
+        console.log(`🗑️ Cleared messages for user: ${userId}`);
       },
 
       // ✅ Clear all chat data (for logout)
@@ -261,17 +293,32 @@ export const useChatStore = create(
 
       subscribeToMessages: () => {
         const { selectedUser } = get();
-        if (!selectedUser) return;
+        if (!selectedUser) {
+          console.log("⚠️ No selected user, skipping message subscription");
+          return;
+        }
 
         const socket = useAuthStore.getState().socket;
-        if (!socket) return; // ✅ Check if socket exists
+        if (!socket) {
+          console.log("⚠️ No socket connection, skipping message subscription");
+          return;
+        }
+
+        console.log("📡 Subscribing to messages for user:", selectedUser._id);
 
         socket.on("newMessage", (newMessage) => {
-          const isMessageSentFromSelectedUser = newMessage.senderId === selectedUser._id;
-          if (!isMessageSentFromSelectedUser) return;
-
-          // Use the new addMessage method
-          get().addMessage(newMessage);
+          console.log("📨 Received new message:", newMessage);
+          
+          // Only handle messages for the current conversation
+          const isMessageForCurrentConversation = 
+            (newMessage.senderId === selectedUser._id || newMessage.receiverId === selectedUser._id);
+          
+          if (isMessageForCurrentConversation) {
+            console.log("✅ Message is for current conversation, adding it");
+            get().addMessage(newMessage);
+          } else {
+            console.log("⚠️ Message not for current conversation, ignoring");
+          }
         });
       },
 
@@ -283,7 +330,18 @@ export const useChatStore = create(
       },
 
       // Set selected user for chat
-      setSelectedUser: (selectedUser) => set({ selectedUser }),
+      setSelectedUser: (selectedUser) => {
+        console.log("👤 Setting selected user:", selectedUser?._id);
+        
+        // Clear current messages when switching users to ensure clean separation
+        if (selectedUser) {
+          set({ selectedUser, messages: [] });
+          console.log("🧹 Cleared messages for new conversation");
+        } else {
+          set({ selectedUser: null, messages: [] });
+          console.log("🧹 Cleared messages and selected user");
+        }
+      },
     }),
     {
       name: "chat-storage", // unique name for localStorage key
@@ -307,6 +365,16 @@ export const useChatStore = create(
         }
         return value;
       }),
+      // ✅ Add version to handle storage updates
+      version: 1,
+      // ✅ Migrate old storage format if needed
+      migrate: (persistedState, version) => {
+        if (version === 0) {
+          // Clear old message format
+          return { ...persistedState, messages: [] };
+        }
+        return persistedState;
+      },
     }
   )
 );
