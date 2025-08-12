@@ -5,13 +5,16 @@ import express from "express";
 const app = express();
 const server = http.createServer(app);
 
-// Simple socket configuration
+// More permissive socket configuration for production
 const io = new Server(server, {
   cors: {
-    origin: "*", // Allow all origins for now
-    methods: ["GET", "POST"],
+    origin: "*", // Allow all origins
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   },
+  allowEIO3: true, // Allow Engine.IO v3 clients
+  transports: ["websocket", "polling"], // Support both transport methods
 });
 
 const userSocketMap = {};
@@ -26,15 +29,27 @@ io.on("connection", (socket) => {
   const userId = socket.handshake.query.userId;
   if (userId) {
     userSocketMap[userId] = socket.id;
-    io.emit("getOnlineUsers", Object.keys(userSocketMap));
+    console.log(`✅ User ${userId} mapped to socket ${socket.id}`);
+    
+    // Emit current online users to all clients
+    const onlineUserIds = Object.keys(userSocketMap);
+    io.emit("getOnlineUsers", onlineUserIds);
+    console.log(`📡 Emitted online users: ${onlineUserIds.join(', ')}`);
   }
 
   socket.on("disconnect", () => {
     console.log("❌ User disconnected:", socket.id);
     if (userId) {
       delete userSocketMap[userId];
-      io.emit("getOnlineUsers", Object.keys(userSocketMap));
+      const onlineUserIds = Object.keys(userSocketMap);
+      io.emit("getOnlineUsers", onlineUserIds);
+      console.log(`📡 Updated online users after disconnect: ${onlineUserIds.join(', ')}`);
     }
+  });
+
+  // Handle errors
+  socket.on("error", (error) => {
+    console.error("❌ Socket error:", error);
   });
 });
 
