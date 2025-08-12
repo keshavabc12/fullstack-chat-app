@@ -1,55 +1,80 @@
-import { Link } from "react-router-dom";
 import { useAuthStore } from "../store/useAuthStore";
-import { LogOut, MessageSquare, Settings, User } from "lucide-react";
+import { useChatStore } from "../store/useChatStore";
+import { Bell, Settings, LogOut, User } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const Navbar = () => {
-  const { logout, authUser } = useAuthStore();
+  const { authUser, logout } = useAuthStore();
+  const { notifications } = useChatStore();
+
+  // ✅ Calculate total unread notifications
+  const totalUnread = Object.values(notifications || {}).reduce((total, userNotifs) => {
+    return total + userNotifs.filter(n => !n.read).length;
+  }, 0);
 
   return (
-    <header
-      className="bg-base-100 border-b border-base-300 fixed w-full top-0 z-40 
-    backdrop-blur-lg bg-base-100/80"
-    >
-      <div className="container mx-auto px-4 h-16">
-        <div className="flex items-center justify-between h-full">
-          <div className="flex items-center gap-8">
-            <Link to="/" className="flex items-center gap-2.5 hover:opacity-80 transition-all">
-              <div className="size-9 rounded-lg bg-primary/10 flex items-center justify-center">
-                <MessageSquare className="w-5 h-5 text-primary" />
-              </div>
-              <h1 className="text-lg font-bold">Chatty</h1>
-            </Link>
+    <nav className="navbar bg-base-100 border-b border-base-300 fixed top-0 z-40">
+      <div className="navbar-start">
+        <Link to="/" className="btn btn-ghost text-xl">
+          💬 ChatApp
+        </Link>
+      </div>
+
+      <div className="navbar-end">
+        <div className="flex items-center gap-2">
+          {/* Notification Bell with Badge */}
+          <div className="relative">
+            <button className="btn btn-ghost btn-circle">
+              <Bell className="size-5" />
+            </button>
+            {totalUnread > 0 && (
+              <span className="absolute -top-1 -right-1 badge badge-primary badge-sm">
+                {totalUnread > 99 ? "99+" : totalUnread}
+              </span>
+            )}
           </div>
 
-          <div className="flex items-center gap-2">
-            <Link
-              to={"/settings"}
-              className={`
-              btn btn-sm gap-2 transition-colors
-              
-              `}
-            >
-              <Settings className="w-4 h-4" />
-              <span className="hidden sm:inline">Settings</span>
-            </Link>
-
-            {authUser && (
-              <>
-                <Link to={"/profile"} className={`btn btn-sm gap-2`}>
-                  <User className="size-5" />
-                  <span className="hidden sm:inline">Profile</span>
+          {/* Profile Menu */}
+          <div className="dropdown dropdown-end">
+            <div tabIndex={0} role="button" className="btn btn-ghost btn-circle avatar">
+              <div className="w-10 rounded-full">
+                <img
+                  alt="Profile"
+                  src={authUser?.profilePic || "/avatar.png"}
+                  onError={(e) => {
+                    e.target.src = "/avatar.png";
+                  }}
+                />
+              </div>
+            </div>
+            <ul tabIndex={0} className="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52">
+              <li>
+                <Link to="/profile" className="flex items-center gap-2">
+                  <User className="size-4" />
+                  Profile
                 </Link>
-
-                <button className="flex gap-2 items-center" onClick={logout}>
-                  <LogOut className="size-5" />
-                  <span className="hidden sm:inline">Logout</span>
+              </li>
+              <li>
+                <Link to="/settings" className="flex items-center gap-2">
+                  <Settings className="size-4" />
+                  Settings
+                </Link>
+              </li>
+              <li>
+                <button
+                  onClick={logout}
+                  className="flex items-center gap-2 text-error"
+                >
+                  <LogOut className="size-4" />
+                  Logout
                 </button>
-              </>
-            )}
+              </li>
+            </ul>
           </div>
         </div>
       </div>
-    </header>
+    </nav>
   );
 };
+
 export default Navbar;

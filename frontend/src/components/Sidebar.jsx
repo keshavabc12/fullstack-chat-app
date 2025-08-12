@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import { useChatStore } from "../store/useChatStore";
 import { useAuthStore } from "../store/useAuthStore";
 import SidebarSkeleton from "./skeletons/SidebarSkeleton";
-import { Users } from "lucide-react";
+import { Users, Bell } from "lucide-react";
 import { formatMessageTime } from "../lib/utils";
 
 const Sidebar = () => {
-  const { getUsers, users, selectedUser, setSelectedUser, isUsersLoading, messages } = useChatStore();
+  const { getUsers, users, selectedUser, setSelectedUser, isUsersLoading, messages, getSortedUsers, notifications } = useChatStore();
   const { onlineUsers = [], authUser } = useAuthStore(); // ✅ fallback to empty array
   const [showOnlineOnly, setShowOnlineOnly] = useState(false);
   
@@ -30,6 +30,9 @@ const Sidebar = () => {
   // ✅ Ensure messages is always an array
   const safeMessages = Array.isArray(messages) ? messages : [];
   
+  // ✅ Get sorted users (new messages first)
+  const sortedUsers = getSortedUsers();
+  
   // ✅ Get last message for each user
   const getLastMessage = (userId) => {
     const userMessages = safeMessages.filter(
@@ -40,10 +43,15 @@ const Sidebar = () => {
   
   // ✅ Get unread message count for a user
   const getUnreadCount = (userId) => {
-    const userMessages = safeMessages.filter(
-      msg => msg.receiverId === userId && msg.senderId !== authUser?._id
-    );
-    return userMessages.length;
+    const userNotifications = notifications[userId] || [];
+    return userNotifications.filter(n => !n.read).length;
+  };
+  
+  // ✅ Get total notification count
+  const getTotalNotifications = () => {
+    return Object.values(notifications).reduce((total, userNotifs) => {
+      return total + userNotifs.filter(n => !n.read).length;
+    }, 0);
   };
   
   useEffect(() => {
@@ -51,18 +59,35 @@ const Sidebar = () => {
   }, [getUsers]);
 
   const filteredUsers = showOnlineOnly
-    ? safeUsers.filter((user) => user?._id && safeOnlineUsers.includes(user._id))
-    : safeUsers;
+    ? sortedUsers.filter((user) => user?._id && safeOnlineUsers.includes(user._id))
+    : sortedUsers;
 
   if (isUsersLoading) return <SidebarSkeleton />;
 
   return (
     <aside className="h-full w-20 lg:w-72 border-r border-base-300 flex flex-col transition-all duration-200">
       <div className="border-b border-base-300 w-full p-5">
-        <div className="flex items-center gap-2">
-          <Users className="size-6" />
-          <span className="font-medium hidden lg:block">Contacts</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Users className="size-6" />
+            <span className="font-medium hidden lg:block">Contacts</span>
+          </div>
+          
+          {/* Total notifications indicator */}
+          {(() => {
+            const totalNotifs = getTotalNotifications();
+            if (totalNotifs > 0) {
+              return (
+                <div className="flex items-center gap-2">
+                  <Bell className="size-5 text-primary" />
+                  <span className="badge badge-primary badge-sm">{totalNotifs}</span>
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
+        
         {/* TODO: Online filter toggle */}
         <div className="mt-3 hidden lg:flex items-center gap-2">
           <label className="cursor-pointer flex items-center gap-2">
@@ -102,8 +127,23 @@ const Sidebar = () => {
               <div className="hidden lg:block text-left min-w-0 flex-1">
                 <div className="flex items-center justify-between">
                   <div className="font-medium truncate">{user.fullName}</div>
-                  <div className="text-xs text-zinc-400">
-                    {safeOnlineUsers.includes(user._id) ? "Online" : "Offline"}
+                  <div className="flex items-center gap-2">
+                    <div className="text-xs text-zinc-400">
+                      {safeOnlineUsers.includes(user._id) ? "Online" : "Offline"}
+                    </div>
+                    
+                    {/* Notification indicator */}
+                    {(() => {
+                      const unreadCount = getUnreadCount(user._id);
+                      if (unreadCount > 0) {
+                        return (
+                          <div className="bg-primary text-primary-content text-xs rounded-full px-2 py-1 min-w-[20px] text-center">
+                            {unreadCount > 99 ? "99+" : unreadCount}
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                 </div>
                 
@@ -134,19 +174,6 @@ const Sidebar = () => {
                   return null;
                 })()}
               </div>
-              
-              {/* Unread message indicator */}
-              {(() => {
-                const unreadCount = getUnreadCount(user._id);
-                if (unreadCount > 0) {
-                  return (
-                    <div className="bg-primary text-primary-content text-xs rounded-full px-2 py-1 min-w-[20px] text-center">
-                      {unreadCount > 99 ? "99+" : unreadCount}
-                    </div>
-                  );
-                }
-                return null;
-              })()}
             </button>
           ) : null
         )}
