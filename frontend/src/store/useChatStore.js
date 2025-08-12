@@ -88,6 +88,10 @@ export const useChatStore = create(
           console.log("📝 Updated messages array for this conversation:", newMessages);
           
           set({ messages: newMessages });
+          
+          // ✅ Update user order (sent message - user stays at top)
+          get().updateUserOrder(selectedUser._id, true);
+          
         } catch (error) {
           console.error("❌ Failed to send message:", error);
           toast.error(error.response?.data?.message || "Failed to send message");
@@ -125,6 +129,9 @@ export const useChatStore = create(
           const updatedMessages = [...safeMessages, newMessage];
           set({ messages: updatedMessages });
           console.log("✅ Added new message to current conversation:", newMessage._id);
+          
+          // ✅ Update user order (received message - user moves to top)
+          get().updateUserOrder(newMessage.senderId, false);
           
           // ✅ Add notification for new message (call directly to avoid recursion)
           const { authUser } = useAuthStore.getState();
@@ -192,25 +199,44 @@ export const useChatStore = create(
         }
       },
 
-      // ✅ Get sorted users (new messages first)
+      // ✅ Handle user reordering when messages are sent/received
+      updateUserOrder: (userId, isMessageSent = false) => {
+        console.log(`🔄 Updating user order for ${userId}, message sent: ${isMessageSent}`);
+        
+        // If it's a sent message, we don't need to reorder since selectedUser stays at top
+        if (isMessageSent) {
+          console.log("✅ Message sent - user stays at top (no reordering needed)");
+          return;
+        }
+        
+        // If it's a received message, the user will automatically move to top
+        // due to unread count increase in getSortedUsers
+        console.log("📨 Message received - user will move to top due to unread count");
+      },
+
+      // ✅ Get sorted users (active conversations first, then by unread count)
       getSortedUsers: () => {
-        const { users, notifications } = get();
+        const { users, notifications, selectedUser } = get();
         const safeUsers = Array.isArray(users) ? users : [];
         const safeNotifications = notifications || {};
         
-        return safeUsers.sort((a, b) => {
+        const sortedUsers = safeUsers.sort((a, b) => {
+          // 1. Selected user (current conversation) always stays at top
+          if (selectedUser && a._id === selectedUser._id) return -1;
+          if (selectedUser && b._id === selectedUser._id) return 1;
+          
+          // 2. Sort by unread count (highest first)
           const aNotifications = safeNotifications[a._id] || [];
           const bNotifications = safeNotifications[b._id] || [];
           
           const aUnread = aNotifications.filter(n => !n.read).length;
           const bUnread = bNotifications.filter(n => !n.read).length;
           
-          // Sort by unread count (highest first)
           if (aUnread !== bUnread) {
             return bUnread - aUnread;
           }
           
-          // If same unread count, sort by last message time
+          // 3. If same unread count, sort by last message time (most recent first)
           const aLastMessage = get().getLastMessage(a._id);
           const bLastMessage = get().getLastMessage(b._id);
           
@@ -221,8 +247,21 @@ export const useChatStore = create(
           if (aLastMessage) return -1;
           if (bLastMessage) return 1;
           
+          // 4. If no messages, maintain original order
           return 0;
         });
+        
+        // Log the sorting results for debugging
+        if (sortedUsers.length > 0) {
+          console.log("📋 User order after sorting:");
+          sortedUsers.forEach((user, index) => {
+            const unreadCount = (safeNotifications[user._id] || []).filter(n => !n.read).length;
+            const isSelected = selectedUser && user._id === selectedUser._id;
+            console.log(`${index + 1}. ${user.fullName} - Unread: ${unreadCount} ${isSelected ? '(SELECTED - STAYS AT TOP)' : ''}`);
+          });
+        }
+        
+        return sortedUsers;
       },
 
       // ✅ Get last message for a user
@@ -269,6 +308,9 @@ export const useChatStore = create(
               }))
             }
           });
+          
+          // ✅ Update user order after marking as read
+          console.log(`🔄 User ${userId} messages marked as read - order will update automatically`);
         }
       },
 
