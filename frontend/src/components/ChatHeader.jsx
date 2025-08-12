@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
+import { formatMessageTime } from "../lib/utils";
 
 const ChatHeader = () => {
   const { selectedUser, setSelectedUser } = useChatStore();
@@ -20,6 +21,25 @@ const ChatHeader = () => {
     return [];
   })();
 
+  // ✅ Get last message time for this user
+  const getLastSeen = () => {
+    const { messages } = useChatStore.getState();
+    const safeMessages = Array.isArray(messages) ? messages : [];
+    
+    const userMessages = safeMessages.filter(
+      msg => (msg.senderId === selectedUser._id || msg.receiverId === selectedUser._id)
+    );
+    
+    if (userMessages.length > 0) {
+      const lastMessage = userMessages[userMessages.length - 1];
+      return lastMessage.createdAt;
+    }
+    return null;
+  };
+
+  const lastSeen = getLastSeen();
+  const isOnline = safeOnlineUsers.includes(selectedUser._id);
+
   return (
     <div className="p-2.5 border-b border-base-300">
       <div className="flex items-center justify-between">
@@ -32,6 +52,10 @@ const ChatHeader = () => {
                 alt={selectedUser.fullName}
                 onError={(e) => { e.target.src = "/avatar.png"; }}
               />
+              {/* Online indicator */}
+              {isOnline && (
+                <span className="absolute bottom-0 right-0 size-3 bg-green-500 rounded-full ring-2 ring-base-100" />
+              )}
             </div>
           </div>
 
@@ -39,14 +63,23 @@ const ChatHeader = () => {
           <div>
             <h3 className="font-medium">{selectedUser.fullName}</h3>
             <p className="text-sm text-base-content/70">
-              {safeOnlineUsers.includes(selectedUser._id) ? "Online" : "Offline"}
+              {isOnline ? (
+                <span className="text-green-500">🟢 Online</span>
+              ) : lastSeen ? (
+                <span>Last seen {formatMessageTime(lastSeen)}</span>
+              ) : (
+                <span>Offline</span>
+              )}
             </p>
           </div>
         </div>
 
         {/* Close button */}
-        <button onClick={() => setSelectedUser(null)}>
-          <X />
+        <button 
+          onClick={() => setSelectedUser(null)}
+          className="btn btn-ghost btn-sm btn-circle"
+        >
+          <X className="size-5" />
         </button>
       </div>
     </div>

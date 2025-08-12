@@ -3,10 +3,11 @@ import { useChatStore } from "../store/useChatStore";
 import { useAuthStore } from "../store/useAuthStore";
 import SidebarSkeleton from "./skeletons/SidebarSkeleton";
 import { Users } from "lucide-react";
+import { formatMessageTime } from "../lib/utils";
 
 const Sidebar = () => {
-  const { getUsers, users, selectedUser, setSelectedUser, isUsersLoading } = useChatStore();
-  const { onlineUsers = [] } = useAuthStore(); // ✅ fallback to empty array
+  const { getUsers, users, selectedUser, setSelectedUser, isUsersLoading, messages } = useChatStore();
+  const { onlineUsers = [], authUser } = useAuthStore(); // ✅ fallback to empty array
   const [showOnlineOnly, setShowOnlineOnly] = useState(false);
   
   // ✅ Ensure onlineUsers is always an array with multiple safety checks
@@ -25,6 +26,25 @@ const Sidebar = () => {
   
   // ✅ Ensure users is always an array
   const safeUsers = Array.isArray(users) ? users : [];
+  
+  // ✅ Ensure messages is always an array
+  const safeMessages = Array.isArray(messages) ? messages : [];
+  
+  // ✅ Get last message for each user
+  const getLastMessage = (userId) => {
+    const userMessages = safeMessages.filter(
+      msg => (msg.senderId === userId || msg.receiverId === userId)
+    );
+    return userMessages.length > 0 ? userMessages[userMessages.length - 1] : null;
+  };
+  
+  // ✅ Get unread message count for a user
+  const getUnreadCount = (userId) => {
+    const userMessages = safeMessages.filter(
+      msg => msg.receiverId === userId && msg.senderId !== authUser?._id
+    );
+    return userMessages.length;
+  };
   
   useEffect(() => {
     getUsers();
@@ -79,12 +99,54 @@ const Sidebar = () => {
                 )}
               </div>
 
-              <div className="hidden lg:block text-left min-w-0">
-                <div className="font-medium truncate">{user.fullName}</div>
-                <div className="text-sm text-zinc-400">
-                  {safeOnlineUsers.includes(user._id) ? "Online" : "Offline"}
+              <div className="hidden lg:block text-left min-w-0 flex-1">
+                <div className="flex items-center justify-between">
+                  <div className="font-medium truncate">{user.fullName}</div>
+                  <div className="text-xs text-zinc-400">
+                    {safeOnlineUsers.includes(user._id) ? "Online" : "Offline"}
+                  </div>
                 </div>
+                
+                {/* Message preview */}
+                {(() => {
+                  const lastMessage = getLastMessage(user._id);
+                  if (lastMessage) {
+                    return (
+                      <div className="text-sm text-zinc-500 truncate mt-1">
+                        {lastMessage.senderId === user._id ? "" : "You: "}
+                        {lastMessage.text || (lastMessage.image ? "📷 Image" : "Message")}
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+                
+                {/* Last message time */}
+                {(() => {
+                  const lastMessage = getLastMessage(user._id);
+                  if (lastMessage?.createdAt) {
+                    return (
+                      <div className="text-xs text-zinc-400 mt-1">
+                        {formatMessageTime(lastMessage.createdAt)}
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
+              
+              {/* Unread message indicator */}
+              {(() => {
+                const unreadCount = getUnreadCount(user._id);
+                if (unreadCount > 0) {
+                  return (
+                    <div className="bg-primary text-primary-content text-xs rounded-full px-2 py-1 min-w-[20px] text-center">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </button>
           ) : null
         )}

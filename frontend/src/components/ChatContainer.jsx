@@ -15,6 +15,7 @@ const ChatContainer = () => {
     selectedUser,
     subscribeToMessages,
     unsubscribeFromMessages,
+    markMessagesAsRead,
   } = useChatStore();
   const { authUser } = useAuthStore();
   const messageEndRef = useRef(null);
@@ -26,16 +27,26 @@ const ChatContainer = () => {
     if (selectedUser?._id) {
       getMessages(selectedUser._id);
       subscribeToMessages();
+      
+      // ✅ Mark messages as read when chat is opened
+      markMessagesAsRead(selectedUser._id);
     }
 
     return () => unsubscribeFromMessages();
-  }, [selectedUser?._id, getMessages, subscribeToMessages, unsubscribeFromMessages]);
+  }, [selectedUser?._id, getMessages, subscribeToMessages, unsubscribeFromMessages, markMessagesAsRead]);
 
   useEffect(() => {
     if (messageEndRef.current && safeMessages.length > 0) {
       messageEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [safeMessages]);
+
+  // ✅ Mark messages as read when scrolling through them
+  useEffect(() => {
+    if (selectedUser?._id && safeMessages.length > 0) {
+      markMessagesAsRead(selectedUser._id);
+    }
+  }, [safeMessages, selectedUser?._id, markMessagesAsRead]);
 
   if (isMessagesLoading) {
     return (
@@ -91,7 +102,8 @@ const ChatContainer = () => {
         
         {safeMessages.length === 0 && (
           <div className="text-center text-zinc-500 py-8">
-            No messages yet. Start a conversation!
+            <div className="text-lg font-medium mb-2">No messages yet</div>
+            <div className="text-sm">Start a conversation with {selectedUser?.fullName}!</div>
           </div>
         )}
       </div>

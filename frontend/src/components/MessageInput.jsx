@@ -1,109 +1,163 @@
-import { useRef, useState } from "react";
+import { useState, useRef } from "react";
 import { useChatStore } from "../store/useChatStore";
-import { Image, Send, X } from "lucide-react";
+import { useAuthStore } from "../store/useAuthStore";
+import { Send, Image, Smile } from "lucide-react";
 import toast from "react-hot-toast";
-const MessageInput = () => {
-  const [text, setText] = useState("");
-  const [imagePreview, setImagePreview] = useState(null);
-  const fileInputRef = useRef(null);
-  const { sendMessage } = useChatStore();
 
-  const handleImageChange = (e) => {
-     const file = e.target.files[0];
-     if (!file.type.startsWith("image/")) {
-       toast.error("Please select an image file");
-       return;
-     }
-      const reader = new FileReader();
-    reader.onloadend = () => {
-      setImagePreview(reader.result);
+const MessageInput = () => {
+  const [message, setMessage] = useState("");
+  const [image, setImage] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
+  const { selectedUser, sendMessage } = useChatStore();
+  const { authUser } = useAuthStore();
+  const fileInputRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
+
+  // ✅ Handle typing indicator
+  const handleTyping = () => {
+    if (!isTyping) {
+      setIsTyping(true);
+      // Emit typing event to other user
+      // TODO: Implement socket typing events
+    }
+    
+    // Clear previous timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    
+    // Set timeout to stop typing indicator
+    typingTimeoutRef.current = setTimeout(() => {
+      setIsTyping(false);
+    }, 1000);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!message.trim() && !image) return;
+
+    try {
+      await sendMessage({ text: message.trim(), image });
+      setMessage("");
+      setImage("");
+      setIsTyping(false);
+      
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    } catch (error) {
+      toast.error("Failed to send message");
+    }
+  };
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image size should be less than 5MB");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setImage(e.target.result);
     };
     reader.readAsDataURL(file);
   };
-   
+
   const removeImage = () => {
-    setImagePreview(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
-    if (!text.trim() && !imagePreview) return;
-
-    try {
-      await sendMessage({
-        text: text.trim(),
-        image: imagePreview,
-      });
-
-      // Clear form
-      setText("");
-      setImagePreview(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    } catch (error) {
-      console.error("Failed to send message:", error);
+    setImage("");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
     }
   };
+
+  if (!selectedUser) return null;
+
   return (
-    <div className="p-4 w-full">
-          {imagePreview && (
-            <div className="mb-3 flex items-center gap-2">
-              <div className="relative">
-                <img
-                  src={imagePreview}
-                  alt="Preview"
-                  className="w-20 h-20 object-cover rounded-lg border border-zinc-700"
-                />
-                <button
-                  onClick={removeImage}
-                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-base-300
-                  flex items-center justify-center"
-                  type="button"
-                >
-                  <X className="size-3" />
-                </button>
-              </div>
-            </div>
-          )}
+    <div className="border-t border-base-300 p-4">
+      {/* Typing indicator */}
+      {isTyping && (
+        <div className="text-sm text-base-content/70 mb-2 flex items-center gap-2">
+          <div className="flex gap-1">
+            <div className="w-2 h-2 bg-base-content/50 rounded-full animate-bounce"></div>
+            <div className="w-2 h-2 bg-base-content/50 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+            <div className="w-2 h-2 bg-base-content/50 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+          </div>
+          <span>{selectedUser.fullName} is typing...</span>
+        </div>
+      )}
 
-           <form onSubmit={handleSendMessage} className="flex items-center gap-2">
-                  <div className="flex-1 flex gap-2">
-                    <input
-                      type="text"
-                      className="w-full input input-bordered rounded-lg input-sm sm:input-md"
-                      placeholder="Type a message..."
-                      value={text}
-                      onChange={(e) => setText(e.target.value)}
-                    />
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      ref={fileInputRef}
-                      onChange={handleImageChange}
-                    />
-          
-                    <button
-                      type="button"
-                      className={`hidden sm:flex btn btn-circle
-                               ${imagePreview ? "text-emerald-500" : "text-zinc-400"}`}
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      <Image size={20} />
-                    </button>
-                  </div>
-                   <button
-                            type="submit"
-                            className="btn btn-sm btn-circle"
-                            disabled={!text.trim() && !imagePreview}
-                          >
-                            <Send size={22} />
-                          </button>
-                 
-                </form>
-      
+      {/* Image preview */}
+      {image && (
+        <div className="mb-3 relative">
+          <img
+            src={image}
+            alt="Preview"
+            className="max-w-[200px] max-h-[200px] rounded-lg object-cover"
+          />
+          <button
+            onClick={removeImage}
+            className="absolute top-2 right-2 btn btn-circle btn-xs btn-error"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="flex gap-2">
+        {/* Image upload button */}
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="btn btn-ghost btn-sm btn-circle"
+          title="Upload image"
+        >
+          <Image className="size-5" />
+        </button>
+        
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleImageUpload}
+          className="hidden"
+        />
+
+        {/* Message input */}
+        <input
+          type="text"
+          value={message}
+          onChange={(e) => {
+            setMessage(e.target.value);
+            handleTyping();
+          }}
+          placeholder={`Message ${selectedUser.fullName}...`}
+          className="flex-1 input input-bordered"
+          disabled={!selectedUser}
+        />
+
+        {/* Emoji button (placeholder for future) */}
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm btn-circle"
+          title="Add emoji"
+        >
+          <Smile className="size-5" />
+        </button>
+
+        {/* Send button */}
+        <button
+          type="submit"
+          disabled={(!message.trim() && !image) || !selectedUser}
+          className="btn btn-primary btn-sm btn-circle"
+        >
+          <Send className="size-5" />
+        </button>
+      </form>
     </div>
-  )
-}
+  );
+};
 
-export default MessageInput
+export default MessageInput;

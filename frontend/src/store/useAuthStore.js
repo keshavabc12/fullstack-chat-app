@@ -78,6 +78,13 @@ export const useAuthStore = create(
     logout: async () => {
       try {
         await axiosInstance.post("/auth/logout");
+        
+        // ✅ Clear all chat data when logging out
+        const { clearAllChatData } = await import('./useChatStore');
+        if (clearAllChatData) {
+          clearAllChatData();
+        }
+        
         set({ authUser: null, onlineUsers: [] }); // ✅ Reset onlineUsers
         toast.success("Logged out successfully");
         get().disconnectSocket();
