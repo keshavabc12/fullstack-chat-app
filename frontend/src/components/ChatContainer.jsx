@@ -33,7 +33,7 @@ const ChatContainer = () => {
     }
 
     return () => unsubscribeFromMessages();
-  }, [selectedUser?._id, getMessages, subscribeToMessages, unsubscribeFromMessages, markMessagesAsRead]);
+  }, [selectedUser?._id]); // ✅ Remove store functions from dependencies
 
   useEffect(() => {
     if (messageEndRef.current && safeMessages.length > 0) {
@@ -46,7 +46,7 @@ const ChatContainer = () => {
     if (selectedUser?._id && safeMessages.length > 0) {
       markMessagesAsRead(selectedUser._id);
     }
-  }, [safeMessages, selectedUser?._id, markMessagesAsRead]);
+  }, [safeMessages, selectedUser?._id]); // ✅ Remove markMessagesAsRead from dependencies
 
   if (isMessagesLoading) {
     return (

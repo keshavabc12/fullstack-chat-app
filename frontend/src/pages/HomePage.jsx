@@ -20,7 +20,7 @@ const HomePage = () => {
         getMessages(selectedUser._id);
       }
     }
-  }, [authUser?._id, selectedUser?._id, getUsers, getMessages, messages.length]);
+  }, [authUser?._id, selectedUser?._id, messages.length]); // ✅ Remove store functions from dependencies
 
   return (
     <div className="h-screen bg-base-200">
