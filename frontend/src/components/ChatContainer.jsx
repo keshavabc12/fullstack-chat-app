@@ -23,30 +23,29 @@ const ChatContainer = () => {
   // ✅ Ensure messages is always an array
   const safeMessages = Array.isArray(messages) ? messages : [];
 
+  // ✅ Load messages and subscribe when user changes
   useEffect(() => {
     if (selectedUser?._id) {
       getMessages(selectedUser._id);
       subscribeToMessages();
-      
-      // ✅ Mark messages as read when chat is opened
-      markMessagesAsRead(selectedUser._id);
     }
 
     return () => unsubscribeFromMessages();
-  }, [selectedUser?._id]); // ✅ Remove store functions from dependencies
+  }, [selectedUser?._id]); // ✅ Only depend on selectedUser change
 
+  // ✅ Mark messages as read only when user changes (not when messages change)
+  useEffect(() => {
+    if (selectedUser?._id) {
+      markMessagesAsRead(selectedUser._id);
+    }
+  }, [selectedUser?._id]); // ✅ Only depend on selectedUser change
+
+  // ✅ Scroll to bottom when messages change
   useEffect(() => {
     if (messageEndRef.current && safeMessages.length > 0) {
       messageEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [safeMessages]);
-
-  // ✅ Mark messages as read when scrolling through them
-  useEffect(() => {
-    if (selectedUser?._id && safeMessages.length > 0) {
-      markMessagesAsRead(selectedUser._id);
-    }
-  }, [safeMessages, selectedUser?._id]); // ✅ Remove markMessagesAsRead from dependencies
 
   if (isMessagesLoading) {
     return (

@@ -93,61 +93,50 @@ export const useChatStore = create(
           const updatedMessages = [...safeMessages, newMessage];
           set({ messages: updatedMessages });
           
-          // ✅ Add notification for new message
+          // ✅ Add notification for new message (call directly to avoid recursion)
           const { authUser } = useAuthStore.getState();
           if (newMessage.senderId !== authUser?._id) {
-            get().addNotification(newMessage.senderId, newMessage);
-          }
-        }
-      },
-
-      // ✅ Add notification for a user
-      addNotification: (userId, message) => {
-        const currentNotifications = get().notifications;
-        const userNotifications = currentNotifications[userId] || [];
-        
-        set({
-          notifications: {
-            ...currentNotifications,
-            [userId]: [...userNotifications, {
-              id: message._id,
-              text: message.text || 'New message',
-              timestamp: new Date().toISOString(),
-              read: false
-            }]
-          }
-        });
-        
-        // ✅ Play notification sound
-        audioManager.playNotification();
-        
-        // ✅ Show browser notification if app is not focused
-        if (document.hidden) {
-          get().showBrowserNotification(userId, message);
-        }
-        
-        // ✅ Show toast notification
-        const { users } = get();
-        const user = users.find(u => u._id === userId);
-        if (user) {
-          toast.success(`New message from ${user.fullName}`, {
-            duration: 4000,
-            position: 'top-right',
-          });
-        }
-      },
-
-      // ✅ Show browser notification
-      showBrowserNotification: (userId, message) => {
-        if ('Notification' in window && Notification.permission === 'granted') {
-          const { users } = get();
-          const user = users.find(u => u._id === userId);
-          if (user) {
-            new Notification(`New message from ${user.fullName}`, {
-              body: message.text || 'You have a new message',
-              icon: user.profilePic || '/avatar.png',
-              tag: `chat-${userId}`,
+            // Add notification directly
+            const currentNotifications = get().notifications;
+            const userNotifications = currentNotifications[newMessage.senderId] || [];
+            
+            set({
+              notifications: {
+                ...currentNotifications,
+                [newMessage.senderId]: [...userNotifications, {
+                  id: newMessage._id,
+                  text: newMessage.text || 'New message',
+                  timestamp: new Date().toISOString(),
+                  read: false
+                }]
+              }
             });
+            
+            // ✅ Play notification sound
+            audioManager.playNotification();
+            
+            // ✅ Show browser notification if app is not focused
+            if (document.hidden) {
+              const { users } = get();
+              const user = users.find(u => u._id === newMessage.senderId);
+              if (user && 'Notification' in window && Notification.permission === 'granted') {
+                new Notification(`New message from ${user.fullName}`, {
+                  body: newMessage.text || 'You have a new message',
+                  icon: user.profilePic || '/avatar.png',
+                  tag: `chat-${newMessage.senderId}`,
+                });
+              }
+            }
+            
+            // ✅ Show toast notification
+            const { users } = get();
+            const user = users.find(u => u._id === newMessage.senderId);
+            if (user) {
+              toast.success(`New message from ${user.fullName}`, {
+                duration: 4000,
+                position: 'top-right',
+              });
+            }
           }
         }
       },
@@ -226,8 +215,19 @@ export const useChatStore = create(
         
         set({ messages: updatedMessages });
         
-        // ✅ Also mark notifications as read
-        get().markNotificationsAsRead(userId);
+        // ✅ Also mark notifications as read (call directly to avoid recursion)
+        const currentNotifications = get().notifications;
+        if (currentNotifications[userId]) {
+          set({
+            notifications: {
+              ...currentNotifications,
+              [userId]: currentNotifications[userId].map(notif => ({
+                ...notif,
+                read: true
+              }))
+            }
+          });
+        }
       },
 
       // ✅ Clear messages for a specific user
