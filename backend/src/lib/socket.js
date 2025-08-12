@@ -5,9 +5,15 @@ import express from "express";
 const app = express();
 const server = http.createServer(app);
 
+// CORS configuration for both development and production
+const allowedOrigins = process.env.NODE_ENV === "production" 
+  ? [process.env.FRONTEND_URL || "https://your-frontend-domain.com"] 
+  : ["http://localhost:5173", "http://localhost:5174"];
+
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:5173", "https://your-frontend.onrender.com"], // ✅ Add frontend Render URL here too
+    origin: allowedOrigins,
+    credentials: true,
   },
 });
 
@@ -21,7 +27,7 @@ io.on("connection", (socket) => {
   console.log("🔌 A user connected:", socket.id);
 
   const userId = socket.handshake.query.userId;
-  console.log("👉 userId from frontend:", userId); // ✅ Optional debug
+  console.log("👉 userId from frontend:", userId);
 
   if (!userId) {
     console.error("❌ No userId provided in socket handshake");
