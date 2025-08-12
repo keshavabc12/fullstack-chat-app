@@ -17,30 +17,37 @@ export const useChatStore = create(
 
       // ✅ Load messages from localStorage or fetch from API
       getMessages: async (userId) => {
+        console.log("📥 getMessages called for userId:", userId);
         set({ isMessagesLoading: true });
         try {
           // First try to get messages from localStorage
           const storedMessages = get().messages.filter(
             msg => (msg.senderId === userId || msg.receiverId === userId)
           );
+          console.log("💾 Found stored messages:", storedMessages.length);
           
           if (storedMessages.length > 0) {
             // Use stored messages first for instant display
             set({ messages: storedMessages });
+            console.log("✅ Using stored messages for instant display");
           }
           
           // Then fetch fresh messages from API
+          console.log("🌐 Fetching fresh messages from API...");
           const res = await axiosInstance.get(`/messages/${userId}`);
           const freshMessages = Array.isArray(res.data) ? res.data : [];
+          console.log("📡 Received fresh messages:", freshMessages.length);
           
           // Merge with existing messages, avoiding duplicates
           const existingMessages = get().messages.filter(
             msg => !(msg.senderId === userId || msg.receiverId === userId)
           );
           const allMessages = [...existingMessages, ...freshMessages];
+          console.log("🔄 Merged messages:", allMessages.length);
           
           set({ messages: allMessages });
         } catch (error) {
+          console.error("❌ Error in getMessages:", error);
           const message = error.response?.data?.message || "Failed to fetch messages";
           toast.error(message);
           // ✅ Set messages to empty array on error
@@ -71,13 +78,20 @@ export const useChatStore = create(
 
       sendMessage: async (messageData) => {
         const { selectedUser, messages } = get();
+        console.log("📤 sendMessage called with:", { messageData, selectedUser, currentMessages: messages });
+        
         try {
           const res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, messageData);
+          console.log("✅ Message sent successfully:", res.data);
+          
           // ✅ Ensure messages is always an array
           const safeMessages = Array.isArray(messages) ? messages : [];
           const newMessages = [...safeMessages, res.data];
+          console.log("📝 Updated messages array:", newMessages);
+          
           set({ messages: newMessages });
         } catch (error) {
+          console.error("❌ Failed to send message:", error);
           toast.error(error.response?.data?.message || "Failed to send message");
         }
       },

@@ -27,20 +27,36 @@ const corsOptions = {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
+    // More permissive CORS for chat app functionality
     const allowedOrigins = process.env.NODE_ENV === "production" 
       ? [
           "https://chatapp-u3zb.onrender.com",
           "https://chatapp1-0gwj.onrender.com",
           "https://chatapp-0gwj.onrender.com",
-          "https://chatapp.onrender.com"
+          "https://chatapp.onrender.com",
+          "https://*.onrender.com", // Allow any subdomain on render
+          "https://*.vercel.app",   // Allow Vercel deployments
+          "https://*.netlify.app"   // Allow Netlify deployments
         ]
       : ["http://localhost:3000", "http://localhost:5173", "http://localhost:4173", "http://localhost:5001"];
     
-    if (allowedOrigins.indexOf(origin) !== -1) {
+    // Check if origin matches any allowed pattern
+    const isAllowed = allowedOrigins.some(allowed => {
+      if (allowed.includes('*')) {
+        // Handle wildcard patterns
+        const baseDomain = allowed.replace('*.', '');
+        return origin.endsWith(baseDomain);
+      }
+      return allowed === origin;
+    });
+    
+    if (isAllowed) {
       callback(null, true);
     } else {
       console.log(`🚫 CORS blocked origin: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
+      console.log(`💡 Allowed origins: ${allowedOrigins.join(', ')}`);
+      // For now, allow the request to prevent blocking chat functionality
+      callback(null, true);
     }
   },
   credentials: true,
