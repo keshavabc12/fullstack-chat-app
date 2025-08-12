@@ -16,51 +16,51 @@ const __dirname = path.dirname(__filename);
 
 const PORT = process.env.PORT || 5000;
 
-// CORS configuration for both development and production
-const allowedOrigins = process.env.NODE_ENV === "production" 
-  ? [process.env.FRONTEND_URL || "https://your-frontend-domain.com"] 
-  : ["http://localhost:5173", "http://localhost:5174"];
-
+// Simple CORS configuration
 app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: true, // Allow all origins for now
   credentials: true,
 }));
 
-// Middleware with increased payload size limits
+// Middleware
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 app.use(cookieParser());
 
-// Routes
+// API Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.json({ status: "OK", timestamp: new Date().toISOString() });
+});
+
 // Serve static files in production
 if (process.env.NODE_ENV === "production") {
-  // Serve static files from the React app build directory
-  app.use(express.static(path.join(__dirname, "../frontend/dist")));
-  
-  // Handle React routing, return all requests to React app
-  app.get("*", (req, res) => {
-    res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
-  });
+  try {
+    app.use(express.static(path.join(__dirname, "../frontend/dist")));
+    
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
+    });
+  } catch (error) {
+    console.error("Error serving static files:", error);
+  }
 }
 
-// Start server after DB connection
-connectDB().then(() => {
-  server.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  });
-}).catch((err) => {
-  console.error("Failed to connect to MongoDB", err);
-  process.exit(1);
-});
+// Start server
+const startServer = async () => {
+  try {
+    await connectDB();
+    server.listen(PORT, () => {
+      console.log(`✅ Server running on port ${PORT}`);
+      console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    });
+  } catch (error) {
+    console.error("❌ Failed to start server:", error);
+    process.exit(1);
+  }
+};
+
+startServer();

@@ -5,14 +5,11 @@ import express from "express";
 const app = express();
 const server = http.createServer(app);
 
-// CORS configuration for both development and production
-const allowedOrigins = process.env.NODE_ENV === "production" 
-  ? [process.env.FRONTEND_URL || "https://your-frontend-domain.com"] 
-  : ["http://localhost:5173", "http://localhost:5174"];
-
+// Simple socket configuration
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: "*", // Allow all origins for now
+    methods: ["GET", "POST"],
     credentials: true,
   },
 });
@@ -24,24 +21,20 @@ export function getReceiverSocketId(userId) {
 }
 
 io.on("connection", (socket) => {
-  console.log("🔌 A user connected:", socket.id);
+  console.log("🔌 User connected:", socket.id);
 
   const userId = socket.handshake.query.userId;
-  console.log("👉 userId from frontend:", userId);
-
-  if (!userId) {
-    console.error("❌ No userId provided in socket handshake");
-    return;
+  if (userId) {
+    userSocketMap[userId] = socket.id;
+    io.emit("getOnlineUsers", Object.keys(userSocketMap));
   }
 
-  userSocketMap[userId] = socket.id;
-
-  io.emit("getOnlineUsers", Object.keys(userSocketMap));
-
   socket.on("disconnect", () => {
-    console.log("❌ A user disconnected:", socket.id);
-    delete userSocketMap[userId];
-    io.emit("getOnlineUsers", Object.keys(userSocketMap));
+    console.log("❌ User disconnected:", socket.id);
+    if (userId) {
+      delete userSocketMap[userId];
+      io.emit("getOnlineUsers", Object.keys(userSocketMap));
+    }
   });
 });
 
