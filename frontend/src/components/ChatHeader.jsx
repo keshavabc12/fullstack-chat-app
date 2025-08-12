@@ -4,7 +4,21 @@ import { useChatStore } from "../store/useChatStore";
 
 const ChatHeader = () => {
   const { selectedUser, setSelectedUser } = useChatStore();
-  const { onlineUsers } = useAuthStore();
+  const { onlineUsers = [] } = useAuthStore(); // ✅ Add fallback to empty array
+  
+  // ✅ Ensure onlineUsers is always an array with multiple safety checks
+  const safeOnlineUsers = (() => {
+    if (Array.isArray(onlineUsers)) {
+      return onlineUsers;
+    }
+    if (onlineUsers && typeof onlineUsers === 'object') {
+      return Object.keys(onlineUsers);
+    }
+    if (typeof onlineUsers === 'string') {
+      return [onlineUsers];
+    }
+    return [];
+  })();
 
   return (
     <div className="p-2.5 border-b border-base-300">
@@ -14,11 +28,10 @@ const ChatHeader = () => {
           <div className="avatar">
             <div className="size-10 rounded-full relative">
               <img
-  src={selectedUser.profilePic || "/avatar.png"}
-  alt={selectedUser.fullName}
-  onError={(e) => { e.target.src = "/avatar.png"; }}
-/>
-
+                src={selectedUser.profilePic || "/avatar.png"}
+                alt={selectedUser.fullName}
+                onError={(e) => { e.target.src = "/avatar.png"; }}
+              />
             </div>
           </div>
 
@@ -26,7 +39,7 @@ const ChatHeader = () => {
           <div>
             <h3 className="font-medium">{selectedUser.fullName}</h3>
             <p className="text-sm text-base-content/70">
-              {onlineUsers.includes(selectedUser._id) ? "Online" : "Offline"}
+              {safeOnlineUsers.includes(selectedUser._id) ? "Online" : "Offline"}
             </p>
           </div>
         </div>
@@ -39,4 +52,5 @@ const ChatHeader = () => {
     </div>
   );
 };
+
 export default ChatHeader;

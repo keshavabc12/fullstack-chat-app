@@ -9,14 +9,30 @@ const Sidebar = () => {
   const { onlineUsers = [] } = useAuthStore(); // ✅ fallback to empty array
   const [showOnlineOnly, setShowOnlineOnly] = useState(false);
   
+  // ✅ Ensure onlineUsers is always an array with multiple safety checks
+  const safeOnlineUsers = (() => {
+    if (Array.isArray(onlineUsers)) {
+      return onlineUsers;
+    }
+    if (onlineUsers && typeof onlineUsers === 'object') {
+      return Object.keys(onlineUsers);
+    }
+    if (typeof onlineUsers === 'string') {
+      return [onlineUsers];
+    }
+    return [];
+  })();
+  
+  // ✅ Ensure users is always an array
+  const safeUsers = Array.isArray(users) ? users : [];
   
   useEffect(() => {
     getUsers();
   }, [getUsers]);
 
   const filteredUsers = showOnlineOnly
-    ? (users || []).filter((user) => user?._id && onlineUsers.includes(user._id))
-    : (users || []);
+    ? safeUsers.filter((user) => user?._id && safeOnlineUsers.includes(user._id))
+    : safeUsers;
 
   if (isUsersLoading) return <SidebarSkeleton />;
 
@@ -38,7 +54,7 @@ const Sidebar = () => {
             />
             <span className="text-sm">Show online only</span>
           </label>
-          <span className="text-xs text-zinc-500">({onlineUsers.length - 1} online)</span>
+          <span className="text-xs text-zinc-500">({safeOnlineUsers.length - 1} online)</span>
         </div>
       </div>
 
@@ -58,7 +74,7 @@ const Sidebar = () => {
                   alt={user.fullName || "User avatar"}
                   className="size-12 object-cover rounded-full"
                 />
-                {onlineUsers.includes(user._id) && (
+                {safeOnlineUsers.includes(user._id) && (
                   <span className="absolute bottom-0 right-0 size-3 bg-green-500 rounded-full ring-2 ring-zinc-900" />
                 )}
               </div>
@@ -66,7 +82,7 @@ const Sidebar = () => {
               <div className="hidden lg:block text-left min-w-0">
                 <div className="font-medium truncate">{user.fullName}</div>
                 <div className="text-sm text-zinc-400">
-                  {onlineUsers.includes(user._id) ? "Online" : "Offline"}
+                  {safeOnlineUsers.includes(user._id) ? "Online" : "Offline"}
                 </div>
               </div>
             </button>

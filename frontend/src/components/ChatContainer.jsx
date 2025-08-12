@@ -19,19 +19,23 @@ const ChatContainer = () => {
   const { authUser } = useAuthStore();
   const messageEndRef = useRef(null);
 
-  useEffect(() => {
-    getMessages(selectedUser._id);
+  // ✅ Ensure messages is always an array
+  const safeMessages = Array.isArray(messages) ? messages : [];
 
-    subscribeToMessages();
+  useEffect(() => {
+    if (selectedUser?._id) {
+      getMessages(selectedUser._id);
+      subscribeToMessages();
+    }
 
     return () => unsubscribeFromMessages();
-  }, [selectedUser._id, getMessages, subscribeToMessages, unsubscribeFromMessages]);
+  }, [selectedUser?._id, getMessages, subscribeToMessages, unsubscribeFromMessages]);
 
   useEffect(() => {
-    if (messageEndRef.current && messages) {
+    if (messageEndRef.current && safeMessages.length > 0) {
       messageEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages]);
+  }, [safeMessages]);
 
   if (isMessagesLoading) {
     return (
@@ -48,7 +52,7 @@ const ChatContainer = () => {
       <ChatHeader />
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((message) => (
+        {safeMessages.map((message) => (
           <div
             key={message._id}
             className={`chat ${message.senderId === authUser._id ? "chat-end" : "chat-start"}`}
@@ -84,10 +88,17 @@ const ChatContainer = () => {
             </div>
           </div>
         ))}
+        
+        {safeMessages.length === 0 && (
+          <div className="text-center text-zinc-500 py-8">
+            No messages yet. Start a conversation!
+          </div>
+        )}
       </div>
 
       <MessageInput />
     </div>
   );
 };
+
 export default ChatContainer;
