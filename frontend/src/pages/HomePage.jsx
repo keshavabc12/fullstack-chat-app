@@ -6,7 +6,7 @@ import { useAuthStore } from "../store/useAuthStore";
 import { useEffect } from "react";
 
 const HomePage = () => {
-  const { selectedUser, setSelectedUser, getUsers, getMessages, messages } = useChatStore();
+  const { selectedUser, setSelectedUser, getUsers, getMessages, messages, subscribeToMessages, subscribeToGlobalMessages, unsubscribeFromMessages, unsubscribeFromGlobalMessages } = useChatStore();
   const { authUser } = useAuthStore();
 
   // ✅ Load previous chat data when component mounts
@@ -21,6 +21,28 @@ const HomePage = () => {
       }
     }
   }, [authUser?._id, selectedUser?._id, messages.length]); // ✅ Remove store functions from dependencies
+
+  // ✅ Subscribe to global messages for real-time updates
+  useEffect(() => {
+    if (authUser?._id) {
+      subscribeToGlobalMessages();
+      
+      return () => {
+        unsubscribeFromGlobalMessages();
+      };
+    }
+  }, [authUser?._id, subscribeToGlobalMessages, unsubscribeFromGlobalMessages]);
+
+  // ✅ Subscribe to conversation-specific messages
+  useEffect(() => {
+    if (selectedUser?._id && authUser?._id) {
+      subscribeToMessages();
+      
+      return () => {
+        unsubscribeFromMessages();
+      };
+    }
+  }, [selectedUser?._id, authUser?._id, subscribeToMessages, unsubscribeFromMessages]);
 
   return (
     <div className="h-screen bg-base-200">

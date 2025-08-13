@@ -160,23 +160,47 @@ export const useChatStore = create(
               const { users } = get();
               const user = users.find(u => u._id === newMessage.senderId);
               if (user && 'Notification' in window && Notification.permission === 'granted') {
-                new Notification(`New message from ${user.fullName}`, {
-                  body: newMessage.text || 'You have a new message',
-                  icon: user.profilePic || '/avatar.png',
-                  tag: `chat-${newMessage.senderId}`,
-                });
+                try {
+                  new Notification(`New message from ${user.fullName}`, {
+                    body: newMessage.text || 'You have a new message',
+                    icon: user.profilePic || '/avatar.png',
+                    tag: `chat-${newMessage.senderId}`,
+                    requireInteraction: false,
+                    silent: false,
+                    badge: '/avatar.png',
+                    image: newMessage.image || undefined,
+                  });
+                  console.log("🔔 Browser notification sent successfully");
+                } catch (error) {
+                  console.error("❌ Failed to show browser notification:", error);
+                }
               }
             }
             
-            // ✅ Show toast notification
+            // ✅ Show toast notification with enhanced styling
             const { users } = get();
             const user = users.find(u => u._id === newMessage.senderId);
             if (user) {
               toast.success(`New message from ${user.fullName}`, {
                 duration: 4000,
                 position: 'top-right',
+                style: {
+                  background: '#10b981',
+                  color: '#ffffff',
+                  fontWeight: '600',
+                },
+                icon: '💬',
               });
             }
+            
+            // ✅ Force immediate UI update for user reordering
+            setTimeout(() => {
+              const currentUsers = get().users;
+              if (Array.isArray(currentUsers)) {
+                set({ users: [...currentUsers] });
+                console.log("🔄 Forced UI update for immediate user reordering");
+              }
+            }, 100);
           }
         } else {
           console.log("⚠️ Message already exists, skipping duplicate:", newMessage._id);
@@ -212,6 +236,15 @@ export const useChatStore = create(
         // If it's a received message, the user will automatically move to top
         // due to unread count increase in getSortedUsers
         console.log("📨 Message received - user will move to top due to unread count");
+        
+        // ✅ Force a re-render by updating the users array
+        // This ensures the UI updates immediately when a new message is received
+        const currentUsers = get().users;
+        if (Array.isArray(currentUsers)) {
+          // Create a new array reference to trigger re-render
+          set({ users: [...currentUsers] });
+          console.log("🔄 Triggered users array update for immediate re-render");
+        }
       },
 
       // ✅ Get sorted users (active conversations first, then by unread count)
@@ -257,7 +290,9 @@ export const useChatStore = create(
           sortedUsers.forEach((user, index) => {
             const unreadCount = (safeNotifications[user._id] || []).filter(n => !n.read).length;
             const isSelected = selectedUser && user._id === selectedUser._id;
-            console.log(`${index + 1}. ${user.fullName} - Unread: ${unreadCount} ${isSelected ? '(SELECTED - STAYS AT TOP)' : ''}`);
+            const lastMessage = get().getLastMessage(user._id);
+            const lastMessageTime = lastMessage ? new Date(lastMessage.createdAt).toLocaleTimeString() : 'No messages';
+            console.log(`${index + 1}. ${user.fullName} - Unread: ${unreadCount} ${isSelected ? '(SELECTED - STAYS AT TOP)' : ''} - Last: ${lastMessageTime}`);
           });
         }
         
@@ -333,6 +368,125 @@ export const useChatStore = create(
         set({ messages: [], users: [], selectedUser: null, notifications: {} });
       },
 
+      // ✅ Handle real-time message updates with immediate user reordering
+      handleRealTimeMessage: (newMessage) => {
+        console.log("📨 Handling real-time message:", newMessage);
+        
+        // Add message to store
+        get().addMessage(newMessage);
+        
+        // ✅ Force immediate user reordering
+        const currentUsers = get().users;
+        if (Array.isArray(currentUsers)) {
+          // Create a new array reference to trigger re-render
+          set({ users: [...currentUsers] });
+          console.log("🔄 Immediate user reordering triggered");
+        }
+        
+        // ✅ Update notifications for the sender
+        const { authUser } = useAuthStore.getState();
+        if (newMessage.senderId !== authUser?._id) {
+          const currentNotifications = get().notifications;
+          const userNotifications = currentNotifications[newMessage.senderId] || [];
+          
+          set({
+            notifications: {
+              ...currentNotifications,
+              [newMessage.senderId]: [...userNotifications, {
+                id: newMessage._id,
+                text: newMessage.text || 'New message',
+                timestamp: new Date().toISOString(),
+                read: false
+              }]
+            }
+          });
+          
+          // ✅ Show enhanced notification
+          get().showEnhancedNotification(newMessage);
+        }
+      },
+
+      // ✅ Handle global message notifications (for messages not in current conversation)
+      handleGlobalMessage: (newMessage) => {
+        console.log("🌍 Handling global message:", newMessage);
+        
+        const { authUser } = useAuthStore.getState();
+        if (newMessage.senderId === authUser?._id) {
+          console.log("✅ Message from self, skipping global handling");
+          return;
+        }
+        
+        // ✅ Update notifications for the sender
+        const currentNotifications = get().notifications;
+        const userNotifications = currentNotifications[newMessage.senderId] || [];
+        
+        set({
+          notifications: {
+            ...currentNotifications,
+            [newMessage.senderId]: [...userNotifications, {
+              id: newMessage._id,
+              text: newMessage.text || 'New message',
+              timestamp: new Date().toISOString(),
+              read: false
+            }]
+          }
+        });
+        
+        // ✅ Force immediate user reordering to move sender to top
+        const currentUsers = get().users;
+        if (Array.isArray(currentUsers)) {
+          set({ users: [...currentUsers] });
+          console.log("🔄 Global message triggered immediate user reordering");
+        }
+        
+        // ✅ Show enhanced notification
+        get().showEnhancedNotification(newMessage);
+      },
+
+      // ✅ Show enhanced notification with sound and visual feedback
+      showEnhancedNotification: (message) => {
+        const { users } = get();
+        const user = users.find(u => u._id === message.senderId);
+        
+        if (!user) return;
+        
+        // Play notification sound
+        audioManager.playNotification();
+        
+        // Show browser notification if app is not focused
+        if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+          try {
+            new Notification(`New message from ${user.fullName}`, {
+              body: message.text || 'You have a new message',
+              icon: user.profilePic || '/avatar.png',
+              tag: `chat-${message.senderId}`,
+              requireInteraction: false,
+              silent: false,
+              badge: '/avatar.png',
+              image: message.image || undefined,
+            });
+            console.log("🔔 Enhanced browser notification sent");
+          } catch (error) {
+            console.error("❌ Failed to show enhanced notification:", error);
+          }
+        }
+        
+        // Show enhanced toast notification
+        toast.success(`New message from ${user.fullName}`, {
+          duration: 4000,
+          position: 'top-right',
+          style: {
+            background: '#10b981',
+            color: '#ffffff',
+            fontWeight: '600',
+            borderRadius: '8px',
+            padding: '12px 16px',
+          },
+          icon: '💬',
+        });
+      },
+
+      // ✅ Subscribe to messages for current conversation
       subscribeToMessages: () => {
         const { selectedUser } = get();
         if (!selectedUser) {
@@ -357,14 +511,44 @@ export const useChatStore = create(
           
           if (isMessageForCurrentConversation) {
             console.log("✅ Message is for current conversation, adding it");
-            get().addMessage(newMessage);
+            // Use enhanced message handling for better real-time updates
+            get().handleRealTimeMessage(newMessage);
           } else {
             console.log("⚠️ Message not for current conversation, ignoring");
           }
         });
       },
 
+      // ✅ Unsubscribe from messages
       unsubscribeFromMessages: () => {
+        const socket = useAuthStore.getState().socket;
+        if (socket) {
+          socket.off("newMessage");
+        }
+      },
+
+      // ✅ Subscribe to global messages (for all incoming messages)
+      subscribeToGlobalMessages: () => {
+        const socket = useAuthStore.getState().socket;
+        if (!socket) {
+          console.log("⚠️ No socket connection, skipping global message subscription");
+          return;
+        }
+
+        console.log("📡 Subscribing to global messages");
+
+        socket.on("newMessage", (newMessage) => {
+          console.log("📨 Received new message:", newMessage);
+          
+          // ✅ Handle messages for the current conversation
+          get().handleRealTimeMessage(newMessage);
+          
+          // ✅ Handle global messages (messages not in current conversation)
+          get().handleGlobalMessage(newMessage);
+        });
+      },
+
+      unsubscribeFromGlobalMessages: () => {
         const socket = useAuthStore.getState().socket;
         if (socket) {
           socket.off("newMessage");

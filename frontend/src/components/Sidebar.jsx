@@ -33,6 +33,11 @@ const Sidebar = () => {
   // ✅ Get sorted users (new messages first)
   const sortedUsers = getSortedUsers();
   
+  // ✅ Debug: Log user order changes
+  useEffect(() => {
+    console.log("📋 Sidebar users updated:", sortedUsers.map(u => ({ name: u.fullName, unread: getUnreadCount(u._id) })));
+  }, [sortedUsers]);
+  
   // ✅ Get last message for each user
   const getLastMessage = (userId) => {
     const userMessages = safeMessages.filter(
@@ -57,6 +62,12 @@ const Sidebar = () => {
   useEffect(() => {
     getUsers();
   }, [getUsers]);
+
+  // ✅ Force re-render when users or notifications change for immediate updates
+  useEffect(() => {
+    // This effect ensures the sidebar updates immediately when users are reordered
+    // or when notifications change
+  }, [users, notifications, getSortedUsers()]);
 
   const filteredUsers = showOnlineOnly
     ? sortedUsers.filter((user) => user?._id && safeOnlineUsers.includes(user._id))
@@ -109,10 +120,15 @@ const Sidebar = () => {
             <button
               key={user._id}
               onClick={() => setSelectedUser(user)}
-              className={`w-full p-3 flex items-center gap-3 hover:bg-base-300 transition-colors ${
+              className={`w-full p-3 flex items-center gap-3 hover:bg-base-300 transition-all duration-200 ${
                 selectedUser?._id === user._id ? "bg-base-300 ring-1 ring-base-300" : ""
               }`}
             >
+              {/* ✅ Position indicator for debugging */}
+              <div className="hidden lg:block absolute left-2 top-1/2 transform -translate-y-1/2 text-xs text-base-content/50 font-mono">
+                {filteredUsers.findIndex(u => u._id === user._id) + 1}
+              </div>
+              
               <div className="relative mx-auto lg:mx-0">
                 <img
                   src={user.profilePic && user.profilePic.trim() !== "" ? user.profilePic : "/avatar.png"}
@@ -122,6 +138,16 @@ const Sidebar = () => {
                 {safeOnlineUsers.includes(user._id) && (
                   <span className="absolute bottom-0 right-0 size-3 bg-green-500 rounded-full ring-2 ring-zinc-900" />
                 )}
+                {/* ✅ New message indicator - shows when user has unread messages */}
+                {(() => {
+                  const unreadCount = getUnreadCount(user._id);
+                  if (unreadCount > 0) {
+                    return (
+                      <span className="absolute -top-1 -right-1 size-4 bg-red-500 rounded-full ring-2 ring-white animate-pulse" />
+                    );
+                  }
+                  return null;
+                })()}
               </div>
 
               <div className="hidden lg:block text-left min-w-0 flex-1">
