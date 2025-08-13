@@ -2,6 +2,7 @@ import { X } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
 import { formatMessageTime } from "../lib/utils";
+import VideoCallButton from "./VideoCallButton";
 
 const ChatHeader = () => {
   const { selectedUser, setSelectedUser } = useChatStore();
@@ -74,13 +75,22 @@ const ChatHeader = () => {
           </div>
         </div>
 
-        {/* Close button */}
-        <button 
-          onClick={() => setSelectedUser(null)}
-          className="btn btn-ghost btn-sm btn-circle"
-        >
-          <X className="size-5" />
-        </button>
+        {/* Action buttons */}
+        <div className="flex items-center gap-2">
+          {/* Video Call Button */}
+          <VideoCallButton 
+            selectedUser={selectedUser} 
+            isUserOnline={isOnline} 
+          />
+          
+          {/* Close button */}
+          <button 
+            onClick={() => setSelectedUser(null)}
+            className="btn btn-ghost btn-sm btn-circle"
+          >
+            <X className="size-5" />
+          </button>
+        </div>
       </div>
     </div>
   );
