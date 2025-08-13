@@ -2,3 +2,51 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ✅ Custom animations for date separators */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s ease-out;
+}
+
+/* ✅ Smooth transitions for message grouping */
+.chat {
+  transition: all 0.2s ease-in-out;
+}
+
+.chat:hover {
+  transform: translateY(-1px);
+}
+
+/* ✅ Enhanced date separator styling */
+.date-separator {
+  position: relative;
+  overflow: hidden;
+}
+
+.date-separator::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -100%;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(156, 163, 175, 0.3), transparent);
+  animation: slide-in 1s ease-out forwards;
+}
+
+@keyframes slide-in {
+  to {
+    left: 100%;
+  }
+}
+

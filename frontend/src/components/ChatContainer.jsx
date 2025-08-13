@@ -5,7 +5,7 @@ import ChatHeader from "./ChatHeader";
 import MessageInput from "./MessageInput";
 import MessageSkeleton from "./skeletons/MessageSkeleton";
 import { useAuthStore } from "../store/useAuthStore";
-import { formatMessageTime } from "../lib/utils";
+import { formatMessageTime, formatMessageDate, isDifferentDay, isSameHour } from "../lib/utils";
 
 const ChatContainer = () => {
   const {
@@ -47,26 +47,42 @@ const ChatContainer = () => {
     }
   }, [safeMessages]);
 
-  if (isMessagesLoading) {
-    return (
-      <div className="flex-1 flex flex-col overflow-auto">
-        <ChatHeader />
-        <MessageSkeleton />
-        <MessageInput />
-      </div>
-    );
-  }
+  // ✅ Render messages with date separators
+  const renderMessagesWithDateSeparators = () => {
+    if (safeMessages.length === 0) {
+      return (
+        <div className="text-center text-zinc-500 py-8">
+          <div className="text-lg font-medium mb-2">No messages yet</div>
+          <div className="text-sm">Start a conversation with {selectedUser?.fullName}!</div>
+        </div>
+      );
+    }
 
-  return (
-    <div className="flex-1 flex flex-col overflow-auto">
-      <ChatHeader />
-
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {safeMessages.map((message) => (
+    return safeMessages.map((message, index) => {
+      const showDateSeparator = index === 0 || isDifferentDay(message.createdAt, safeMessages[index - 1].createdAt);
+      const showTimeHeader = index === 0 || 
+                            !isSameHour(message.createdAt, safeMessages[index - 1].createdAt) ||
+                            isDifferentDay(message.createdAt, safeMessages[index - 1].createdAt);
+      
+      return (
+        <div key={message._id}>
+          {/* ✅ Date separator */}
+          {showDateSeparator && (
+            <div className="flex justify-center my-6 animate-fade-in">
+              <div className="bg-gradient-to-r from-base-200 to-base-300 text-base-content/80 px-6 py-3 rounded-full text-sm font-medium shadow-lg border border-base-200 backdrop-blur-sm">
+                <span className="flex items-center gap-3">
+                  <span className="w-2 h-2 bg-primary rounded-full animate-pulse"></span>
+                  <span className="font-semibold">{formatMessageDate(message.createdAt)}</span>
+                  <span className="w-2 h-2 bg-primary rounded-full animate-pulse"></span>
+                </span>
+              </div>
+            </div>
+          )}
+          
+          {/* ✅ Message */}
           <div
-            key={message._id}
             className={`chat ${message.senderId === authUser._id ? "chat-end" : "chat-start"}`}
-            ref={messageEndRef}
+            ref={index === safeMessages.length - 1 ? messageEndRef : null}
           >
             <div className=" chat-image avatar">
               <div className="size-10 rounded-full border">
@@ -82,9 +98,11 @@ const ChatContainer = () => {
               </div>
             </div>
             <div className="chat-header mb-1">
-              <time className="text-xs opacity-50 ml-1">
-                {formatMessageTime(message.createdAt)}
-              </time>
+              {showTimeHeader && (
+                <time className="text-xs opacity-50 ml-1">
+                  {formatMessageTime(message.createdAt)}
+                </time>
+              )}
             </div>
             <div className="chat-bubble flex flex-col">
               {message.image && (
@@ -97,14 +115,27 @@ const ChatContainer = () => {
               {message.text && <p>{message.text}</p>}
             </div>
           </div>
-        ))}
-        
-        {safeMessages.length === 0 && (
-          <div className="text-center text-zinc-500 py-8">
-            <div className="text-lg font-medium mb-2">No messages yet</div>
-            <div className="text-sm">Start a conversation with {selectedUser?.fullName}!</div>
-          </div>
-        )}
+        </div>
+      );
+    });
+  };
+
+  if (isMessagesLoading) {
+    return (
+      <div className="flex-1 flex flex-col overflow-auto">
+        <ChatHeader />
+        <MessageSkeleton />
+        <MessageInput />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 flex flex-col overflow-auto">
+      <ChatHeader />
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {renderMessagesWithDateSeparators()}
       </div>
 
       <MessageInput />
