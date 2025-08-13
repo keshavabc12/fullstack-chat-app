@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Phone, PhoneOff } from "lucide-react";
+import { Phone } from "lucide-react";
 import VideoCall from "./VideoCall";
+import videoCallService from "../lib/videoCallService";
 
 const VideoCallButton = ({ selectedUser, isUserOnline }) => {
   const [isVideoCallOpen, setIsVideoCallOpen] = useState(false);
-  const [isIncomingCall, setIsIncomingCall] = useState(false);
 
   const handleVideoCall = () => {
     if (!selectedUser) return;
@@ -16,17 +16,13 @@ const VideoCallButton = ({ selectedUser, isUserOnline }) => {
       return;
     }
     
+    // Request call through video call service
+    videoCallService.requestCall(selectedUser._id);
     setIsVideoCallOpen(true);
   };
 
   const handleCallEnd = () => {
     setIsVideoCallOpen(false);
-    setIsIncomingCall(false);
-  };
-
-  const handleIncomingCall = () => {
-    setIsIncomingCall(true);
-    setIsVideoCallOpen(true);
   };
 
   if (!selectedUser) return null;
@@ -51,7 +47,7 @@ const VideoCallButton = ({ selectedUser, isUserOnline }) => {
         onClose={() => setIsVideoCallOpen(false)}
         selectedUser={selectedUser}
         onCallEnd={handleCallEnd}
-        isIncomingCall={isIncomingCall}
+        isIncomingCall={false}
       />
     </>
   );
