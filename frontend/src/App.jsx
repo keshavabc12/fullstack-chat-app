@@ -5,6 +5,7 @@ import LoginPage from "./pages/LoginPage";
 import SettingsPage from "./pages/SettingsPage";
 import ProfilePage from "./pages/ProfilePage";
 import GlobalVideoCallHandler from "./components/GlobalVideoCallHandler";
+import VideoCallDebug from "./components/VideoCallDebug";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore } from "./store/useAuthStore";
 import { useThemeStore } from "./store/useThemeStore";
@@ -167,6 +168,8 @@ const App = () => {
         <NotificationPermission />
         {/* Global Video Call Handler - handles incoming calls anywhere in the app */}
         {authUser && <GlobalVideoCallHandler />}
+        {/* Video Call Debug - only show in development */}
+        {authUser && process.env.NODE_ENV === "development" && <VideoCallDebug />}
       </div>
     </ErrorBoundary>
   );

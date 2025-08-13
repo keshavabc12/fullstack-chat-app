@@ -2,13 +2,14 @@ import { useState, useRef, useEffect } from "react";
 import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff, Volume2, VolumeX } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import videoCallService from "../lib/videoCallService";
+import toast from "react-hot-toast";
 
 const VideoCall = ({ isOpen, onClose, selectedUser, onCallEnd, isIncomingCall = false }) => {
   const [isInCall, setIsInCall] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
-  const [callStatus, setCallStatus] = useState("connecting"); // connecting, connected, failed
+  const [callStatus, setCallStatus] = useState("connecting"); // connecting, connected, failed, ended
   
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -36,26 +37,40 @@ const VideoCall = ({ isOpen, onClose, selectedUser, onCallEnd, isIncomingCall = 
     videoCallService.on("offer", handleOffer);
     videoCallService.on("answer", handleAnswer);
     videoCallService.on("callEnded", handleRemoteCallEnd);
+    videoCallService.on("callAccepted", handleCallAccepted);
+    videoCallService.on("callRejected", handleCallRejected);
 
     return () => {
       videoCallService.on("iceCandidate", null);
       videoCallService.on("offer", null);
       videoCallService.on("answer", null);
       videoCallService.on("callEnded", null);
+      videoCallService.on("callAccepted", null);
+      videoCallService.on("callRejected", null);
     };
   }, [isOpen]);
 
   const initializeCall = async () => {
     try {
       setCallStatus("connecting");
+      console.log("🚀 Initializing video call...");
       
       // Get user media (camera and microphone)
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { ideal: 30 }
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
       });
       
       localStreamRef.current = stream;
+      console.log("✅ Media stream obtained:", stream.getTracks().map(t => t.kind));
       
       // Display local video
       if (localVideoRef.current) {
@@ -71,14 +86,17 @@ const VideoCall = ({ isOpen, onClose, selectedUser, onCallEnd, isIncomingCall = 
       });
       
       peerConnectionRef.current = peerConnection;
+      console.log("✅ RTCPeerConnection created");
       
       // Add local stream to peer connection
       stream.getTracks().forEach(track => {
         peerConnection.addTrack(track, stream);
+        console.log(`✅ Added ${track.kind} track to peer connection`);
       });
       
       // Handle incoming remote stream
       peerConnection.ontrack = (event) => {
+        console.log("📹 Remote track received:", event.track.kind);
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = event.streams[0];
         }
@@ -87,6 +105,7 @@ const VideoCall = ({ isOpen, onClose, selectedUser, onCallEnd, isIncomingCall = 
       // Handle ICE candidates
       peerConnection.onicecandidate = (event) => {
         if (event.candidate) {
+          console.log("🧊 ICE candidate generated:", event.candidate.type);
           // Send ICE candidate to remote peer via signaling server
           videoCallService.sendIceCandidate(selectedUser._id, event.candidate);
         }
@@ -94,47 +113,70 @@ const VideoCall = ({ isOpen, onClose, selectedUser, onCallEnd, isIncomingCall = 
       
       // Handle connection state changes
       peerConnection.onconnectionstatechange = () => {
+        console.log("🔗 Connection state changed:", peerConnection.connectionState);
         if (peerConnection.connectionState === "connected") {
           setCallStatus("connected");
           setIsInCall(true);
+          toast.success("Call connected successfully!");
         } else if (peerConnection.connectionState === "failed") {
           setCallStatus("failed");
+          toast.error("Call connection failed");
+        } else if (peerConnection.connectionState === "disconnected") {
+          setCallStatus("ended");
+          toast.error("Call disconnected");
         }
       };
-      
+
+      // Handle ICE connection state changes
+      peerConnection.oniceconnectionstatechange = () => {
+        console.log("🧊 ICE connection state:", peerConnection.iceConnectionState);
+      };
+
       // If this is an incoming call, wait for offer
       // If this is an outgoing call, create and send offer
       if (!isIncomingCall) {
+        console.log("📤 Creating and sending offer...");
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
         
         // Send offer to remote peer via signaling server
         videoCallService.sendOffer(selectedUser._id, offer);
+        console.log("✅ Offer sent successfully");
       }
       
     } catch (error) {
-      console.error("Failed to initialize call:", error);
+      console.error("❌ Failed to initialize call:", error);
       setCallStatus("failed");
+      toast.error(`Failed to initialize call: ${error.message}`);
     }
   };
 
   const handleIceCandidate = (data) => {
     if (peerConnectionRef.current && data.from === selectedUser._id) {
-      peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
+      console.log("🧊 Adding ICE candidate from remote peer");
+      peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(data.candidate))
+        .then(() => console.log("✅ ICE candidate added successfully"))
+        .catch(err => console.error("❌ Failed to add ICE candidate:", err));
     }
   };
 
   const handleOffer = async (data) => {
     if (peerConnectionRef.current && data.from === selectedUser._id) {
       try {
+        console.log("📥 Received offer from remote peer");
         await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(data.offer));
+        console.log("✅ Remote description set");
+        
         const answer = await peerConnectionRef.current.createAnswer();
         await peerConnectionRef.current.setLocalDescription(answer);
+        console.log("✅ Answer created and set");
         
         // Send answer to remote peer
         videoCallService.sendAnswer(selectedUser._id, answer);
+        console.log("✅ Answer sent to remote peer");
       } catch (error) {
-        console.error("Failed to handle offer:", error);
+        console.error("❌ Failed to handle offer:", error);
+        toast.error("Failed to establish call connection");
       }
     }
   };
@@ -142,30 +184,59 @@ const VideoCall = ({ isOpen, onClose, selectedUser, onCallEnd, isIncomingCall = 
   const handleAnswer = async (data) => {
     if (peerConnectionRef.current && data.from === selectedUser._id) {
       try {
+        console.log("📥 Received answer from remote peer");
         await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(data.answer));
+        console.log("✅ Remote description updated with answer");
       } catch (error) {
-        console.error("Failed to handle answer:", error);
+        console.error("❌ Failed to handle answer:", error);
       }
     }
   };
 
-  const handleRemoteCallEnd = (data) => {
-    if (data.from === selectedUser._id) {
+  const handleCallAccepted = (data) => {
+    console.log("✅ Call accepted by remote peer:", data);
+    // The call will be established through WebRTC signaling
+  };
+
+  const handleCallRejected = (data) => {
+    console.log("❌ Call rejected by remote peer:", data);
+    setCallStatus("ended");
+    toast.error("Call was rejected by the other user");
+    setTimeout(() => {
       cleanupCall();
       onCallEnd?.();
       onClose();
+    }, 2000);
+  };
+
+  const handleRemoteCallEnd = (data) => {
+    if (data.from === selectedUser._id) {
+      console.log("📞 Remote peer ended the call");
+      setCallStatus("ended");
+      toast.error("The other user ended the call");
+      setTimeout(() => {
+        cleanupCall();
+        onCallEnd?.();
+        onClose();
+      }, 2000);
     }
   };
 
   const cleanupCall = () => {
+    console.log("🧹 Cleaning up call resources...");
+    
     if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => track.stop());
+      localStreamRef.current.getTracks().forEach(track => {
+        track.stop();
+        console.log(`🛑 Stopped ${track.kind} track`);
+      });
       localStreamRef.current = null;
     }
     
     if (peerConnectionRef.current) {
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
+      console.log("🛑 Closed peer connection");
     }
     
     setIsInCall(false);
@@ -178,6 +249,7 @@ const VideoCall = ({ isOpen, onClose, selectedUser, onCallEnd, isIncomingCall = 
       if (audioTrack) {
         audioTrack.enabled = !audioTrack.enabled;
         setIsMuted(!audioTrack.enabled);
+        toast.success(audioTrack.enabled ? "Microphone unmuted" : "Microphone muted");
       }
     }
   };
@@ -188,16 +260,19 @@ const VideoCall = ({ isOpen, onClose, selectedUser, onCallEnd, isIncomingCall = 
       if (videoTrack) {
         videoTrack.enabled = !videoTrack.enabled;
         setIsVideoOff(!videoTrack.enabled);
+        toast.success(videoTrack.enabled ? "Camera turned on" : "Camera turned off");
       }
     }
   };
 
   const toggleSpeaker = () => {
     setIsSpeakerOn(!isSpeakerOn);
-    // Implementation for speaker toggle would go here
+    toast.success(isSpeakerOn ? "Speaker turned off" : "Speaker turned on");
   };
 
   const endCall = () => {
+    console.log("📞 Ending call...");
+    
     // Notify remote peer that call is ending
     videoCallService.endCall(selectedUser._id);
     
@@ -225,6 +300,7 @@ const VideoCall = ({ isOpen, onClose, selectedUser, onCallEnd, isIncomingCall = 
                 {callStatus === "connecting" && "Connecting..."}
                 {callStatus === "connected" && "Connected"}
                 {callStatus === "failed" && "Call failed"}
+                {callStatus === "ended" && "Call ended"}
               </p>
             </div>
           </div>
@@ -276,6 +352,7 @@ const VideoCall = ({ isOpen, onClose, selectedUser, onCallEnd, isIncomingCall = 
               <div className="text-center">
                 <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                 <p className="text-lg font-semibold">Connecting to {selectedUser?.fullName}...</p>
+                <p className="text-sm text-base-content/70 mt-2">Please wait while we establish the connection</p>
               </div>
             </div>
           )}
@@ -294,6 +371,18 @@ const VideoCall = ({ isOpen, onClose, selectedUser, onCallEnd, isIncomingCall = 
                 >
                   Try Again
                 </button>
+              </div>
+            </div>
+          )}
+
+          {callStatus === "ended" && (
+            <div className="absolute inset-0 flex items-center justify-center bg-base-200 bg-opacity-75">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-warning rounded-full flex items-center justify-center mx-auto mb-4">
+                  <PhoneOff className="w-8 h-8 text-warning-content" />
+                </div>
+                <p className="text-lg font-semibold text-warning">Call Ended</p>
+                <p className="text-base-content/70 mb-4">The call has been terminated</p>
               </div>
             </div>
           )}
