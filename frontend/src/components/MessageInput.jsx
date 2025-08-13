@@ -1,35 +1,44 @@
-import { useState, useRef } from "react";
+﻿import { useState, useRef } from "react";
 import { useChatStore } from "../store/useChatStore";
 import { useAuthStore } from "../store/useAuthStore";
 import { Send, Image, Smile } from "lucide-react";
 import toast from "react-hot-toast";
+import EmojiPicker from "./EmojiPicker";
 
 const MessageInput = () => {
   const [message, setMessage] = useState("");
   const [image, setImage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
   const { selectedUser, sendMessage } = useChatStore();
   const { authUser } = useAuthStore();
   const fileInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
-  // ✅ Handle typing indicator
   const handleTyping = () => {
     if (!isTyping) {
       setIsTyping(true);
-      // Emit typing event to other user
-      // TODO: Implement socket typing events
     }
     
-    // Clear previous timeout
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
     
-    // Set timeout to stop typing indicator
     typingTimeoutRef.current = setTimeout(() => {
       setIsTyping(false);
     }, 1000);
+  };
+
+  const handleEmojiSelect = (emoji) => {
+    setMessage(prev => prev + emoji);
+    setTimeout(() => {
+      const input = document.querySelector("input[type=\"text\"]");
+      if (input) input.focus();
+    }, 100);
+  };
+
+  const toggleEmojiPicker = () => {
+    setIsEmojiPickerOpen(!isEmojiPickerOpen);
   };
 
   const handleSubmit = async (e) => {
@@ -41,6 +50,7 @@ const MessageInput = () => {
       setMessage("");
       setImage("");
       setIsTyping(false);
+      setIsEmojiPickerOpen(false);
       
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
@@ -76,20 +86,18 @@ const MessageInput = () => {
   if (!selectedUser) return null;
 
   return (
-    <div className="border-t border-base-300 p-4">
-      {/* Typing indicator */}
+    <div className="border-t border-base-300 p-4 relative">
       {isTyping && (
         <div className="text-sm text-base-content/70 mb-2 flex items-center gap-2">
           <div className="flex gap-1">
             <div className="w-2 h-2 bg-base-content/50 rounded-full animate-bounce"></div>
-            <div className="w-2 h-2 bg-base-content/50 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-            <div className="w-2 h-2 bg-base-content/50 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+            <div className="w-2 h-2 bg-base-content/50 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }}></div>
+            <div className="w-2 h-2 bg-base-content/50 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
           </div>
           <span>{selectedUser.fullName} is typing...</span>
         </div>
       )}
 
-      {/* Image preview */}
       {image && (
         <div className="mb-3 relative">
           <img
@@ -101,13 +109,12 @@ const MessageInput = () => {
             onClick={removeImage}
             className="absolute top-2 right-2 btn btn-circle btn-xs btn-error"
           >
-            ×
+            
           </button>
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="flex gap-2">
-        {/* Image upload button */}
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
@@ -125,7 +132,6 @@ const MessageInput = () => {
           className="hidden"
         />
 
-        {/* Message input */}
         <input
           type="text"
           value={message}
@@ -138,16 +144,15 @@ const MessageInput = () => {
           disabled={!selectedUser}
         />
 
-        {/* Emoji button (placeholder for future) */}
         <button
           type="button"
-          className="btn btn-ghost btn-sm btn-circle"
+          onClick={toggleEmojiPicker}
+          className={`btn btn-sm btn-circle ${isEmojiPickerOpen ? "btn-primary" : "btn-ghost"}`}
           title="Add emoji"
         >
           <Smile className="size-5" />
         </button>
 
-        {/* Send button */}
         <button
           type="submit"
           disabled={(!message.trim() && !image) || !selectedUser}
@@ -156,6 +161,12 @@ const MessageInput = () => {
           <Send className="size-5" />
         </button>
       </form>
+
+      <EmojiPicker
+        isOpen={isEmojiPickerOpen}
+        onClose={() => setIsEmojiPickerOpen(false)}
+        onEmojiSelect={handleEmojiSelect}
+      />
     </div>
   );
 };
