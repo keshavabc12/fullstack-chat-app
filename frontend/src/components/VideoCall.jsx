@@ -16,6 +16,8 @@ const VideoCall = ({ isOpen, onClose, selectedUser, onCallEnd, isIncomingCall = 
   const localStreamRef = useRef(null);
   const peerConnectionRef = useRef(null);
   const pendingIceCandidatesRef = useRef([]);
+  const pendingOfferRef = useRef(null);
+  const pendingAnswerRef = useRef(null);
   
   const { authUser } = useAuthStore();
 
@@ -133,6 +135,20 @@ const VideoCall = ({ isOpen, onClose, selectedUser, onCallEnd, isIncomingCall = 
         console.log("🧊 ICE connection state:", peerConnection.iceConnectionState);
       };
 
+      // If we received an offer before the peer connection was ready (race), handle it now
+      if (pendingOfferRef.current) {
+        const earlyOffer = pendingOfferRef.current;
+        pendingOfferRef.current = null;
+        await handleOffer(earlyOffer);
+      }
+
+      // If we received an answer before the peer connection was ready (very rare), handle it now
+      if (pendingAnswerRef.current) {
+        const earlyAnswer = pendingAnswerRef.current;
+        pendingAnswerRef.current = null;
+        await handleAnswer(earlyAnswer);
+      }
+
       // If this is an incoming call, wait for offer.
       // If this is an outgoing call, wait for acceptance before creating the offer.
       if (!isIncomingCall) {
@@ -183,7 +199,12 @@ const VideoCall = ({ isOpen, onClose, selectedUser, onCallEnd, isIncomingCall = 
   };
 
   const handleOffer = async (data) => {
-    if (!peerConnectionRef.current) return;
+    if (!peerConnectionRef.current) {
+      // Buffer the offer until the peer connection is ready
+      pendingOfferRef.current = data;
+      console.log("📥 Offer received early, buffering until peer connection is ready");
+      return;
+    }
     if (data?.from && data.from !== selectedUser._id) return;
     if (peerConnectionRef.current) {
       try {
@@ -209,7 +230,12 @@ const VideoCall = ({ isOpen, onClose, selectedUser, onCallEnd, isIncomingCall = 
   };
 
   const handleAnswer = async (data) => {
-    if (!peerConnectionRef.current) return;
+    if (!peerConnectionRef.current) {
+      // Buffer the answer until the peer connection is ready
+      pendingAnswerRef.current = data;
+      console.log("📥 Answer received early, buffering until peer connection is ready");
+      return;
+    }
     if (data?.from && data.from !== selectedUser._id) return;
     if (peerConnectionRef.current) {
       try {
@@ -286,6 +312,8 @@ const VideoCall = ({ isOpen, onClose, selectedUser, onCallEnd, isIncomingCall = 
     setIsInCall(false);
     setCallStatus("connecting");
     pendingIceCandidatesRef.current = [];
+    pendingOfferRef.current = null;
+    pendingAnswerRef.current = null;
   };
 
   const toggleMute = () => {
