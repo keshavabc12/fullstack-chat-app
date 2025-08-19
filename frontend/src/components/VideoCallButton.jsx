@@ -51,8 +51,8 @@ const VideoCallButton = ({ selectedUser, isUserOnline }) => {
     try {
       console.log("📞 Initiating video call with:", selectedUser.fullName);
       
-      // Request call through video call service
-      videoCallService.requestCall(selectedUser._id);
+      // Request call through video call service (explicit video type)
+      videoCallService.requestCall(selectedUser._id, "video");
       
       // Set call in progress
       setIsCallInProgress(true);
@@ -98,6 +98,8 @@ const VideoCallButton = ({ selectedUser, isUserOnline }) => {
   const handleIncomingCall = (data) => {
     // Only show incoming UI if the call is from the currently selected user
     if (selectedUser && data.from === selectedUser._id) {
+      // Ignore non-video call types
+      if (data.type && data.type !== "video") return;
       console.log("📞 Incoming call from:", selectedUser.fullName);
       setIncomingCall(data);
       setIsCallInProgress(true);

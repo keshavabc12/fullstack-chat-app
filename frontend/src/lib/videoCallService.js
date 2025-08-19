@@ -99,8 +99,8 @@ class VideoCallService {
     console.log("✅ Video call socket listeners setup complete");
   }
 
-  // Request a video call with another user
-  requestCall(targetUserId) {
+  // Request a call with another user
+  requestCall(targetUserId, type = "video") {
     if (!this.socket) {
       console.error("❌ Socket not connected");
       throw new Error("Socket not connected");
@@ -116,10 +116,11 @@ class VideoCallService {
     const callData = {
       from: authUser._id,
       to: targetUserId,
+      type,
       timestamp: Date.now()
     };
 
-    console.log("📞 Requesting video call:", callData);
+    console.log("📞 Requesting call:", callData);
     
     this.socket.emit("videoCallRequest", callData);
     

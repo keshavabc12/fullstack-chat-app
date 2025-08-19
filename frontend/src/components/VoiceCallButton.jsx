@@ -29,7 +29,7 @@ const VoiceCallButton = ({ selectedUser, isUserOnline }) => {
     if (!selectedUser) return toast.error("No user selected");
     if (!isUserOnline) return toast.error("User is offline");
     try {
-      videoCallService.requestCall(selectedUser._id);
+      videoCallService.requestCall(selectedUser._id, "voice");
       setIsCallInProgress(true);
       setIsIncoming(false);
       setIsVoiceCallOpen(true);
@@ -41,6 +41,7 @@ const VoiceCallButton = ({ selectedUser, isUserOnline }) => {
 
   const onIncomingCall = (data) => {
     if (selectedUser && data.from === selectedUser._id) {
+      if (data.type && data.type !== "voice") return;
       setIncomingCall(data);
       setIsCallInProgress(true);
       toast.success(`${selectedUser.fullName} is calling...`);
