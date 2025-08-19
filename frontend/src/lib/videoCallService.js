@@ -3,14 +3,17 @@ import { useAuthStore } from "../store/useAuthStore";
 class VideoCallService {
   constructor() {
     this.socket = null;
-    this.onCallRequest = null;
-    this.onCallAccepted = null;
-    this.onCallRejected = null;
-    this.onCallEnded = null;
-    this.onIceCandidate = null;
-    this.onOffer = null;
-    this.onAnswer = null;
-    this.onCallUserOffline = null;
+    // Maintain multiple listeners per event
+    this.listeners = {
+      callRequest: [],
+      callAccepted: [],
+      callRejected: [],
+      callEnded: [],
+      iceCandidate: [],
+      offer: [],
+      answer: [],
+      callUserOffline: []
+    };
   }
 
   // Initialize the service with socket connection
@@ -32,65 +35,65 @@ class VideoCallService {
     // Handle incoming call requests
     this.socket.on("videoCallRequest", (data) => {
       console.log("📞 Incoming call request received:", data);
-      if (this.onCallRequest) {
-        this.onCallRequest(data);
-      }
+      this.listeners.callRequest.forEach(cb => {
+        try { cb && cb(data); } catch (e) { console.error(e); }
+      });
     });
 
     // Handle call acceptance
     this.socket.on("videoCallAccepted", (data) => {
       console.log("✅ Call accepted event received:", data);
-      if (this.onCallAccepted) {
-        this.onCallAccepted(data);
-      }
+      this.listeners.callAccepted.forEach(cb => {
+        try { cb && cb(data); } catch (e) { console.error(e); }
+      });
     });
 
     // Handle call rejection
     this.socket.on("videoCallRejected", (data) => {
       console.log("❌ Call rejected event received:", data);
-      if (this.onCallRejected) {
-        this.onCallRejected(data);
-      }
+      this.listeners.callRejected.forEach(cb => {
+        try { cb && cb(data); } catch (e) { console.error(e); }
+      });
     });
 
     // Handle call ending
     this.socket.on("videoCallEnded", (data) => {
       console.log("📞 Call ended event received:", data);
-      if (this.onCallEnded) {
-        this.onCallEnded(data);
-      }
+      this.listeners.callEnded.forEach(cb => {
+        try { cb && cb(data); } catch (e) { console.error(e); }
+      });
     });
 
     // Handle ICE candidates
     this.socket.on("iceCandidate", (data) => {
       console.log("🧊 ICE candidate received:", data);
-      if (this.onIceCandidate) {
-        this.onIceCandidate(data);
-      }
+      this.listeners.iceCandidate.forEach(cb => {
+        try { cb && cb(data); } catch (e) { console.error(e); }
+      });
     });
 
     // Handle WebRTC offers
     this.socket.on("offer", (data) => {
       console.log("📤 Offer received:", data);
-      if (this.onOffer) {
-        this.onOffer(data);
-      }
+      this.listeners.offer.forEach(cb => {
+        try { cb && cb(data); } catch (e) { console.error(e); }
+      });
     });
 
     // Handle WebRTC answers
     this.socket.on("answer", (data) => {
       console.log("📤 Answer received:", data);
-      if (this.onAnswer) {
-        this.onAnswer(data);
-      }
+      this.listeners.answer.forEach(cb => {
+        try { cb && cb(data); } catch (e) { console.error(e); }
+      });
     });
 
     // Handle user offline during call
     this.socket.on("callUserOffline", (data) => {
       console.log("❌ User offline event received:", data);
-      if (this.onCallUserOffline) {
-        this.onCallUserOffline(data);
-      }
+      this.listeners.callUserOffline.forEach(cb => {
+        try { cb && cb(data); } catch (e) { console.error(e); }
+      });
     });
 
     console.log("✅ Video call socket listeners setup complete");
@@ -239,34 +242,16 @@ class VideoCallService {
 
   // Set event handlers
   on(event, callback) {
-    switch (event) {
-      case "callRequest":
-        this.onCallRequest = callback;
-        break;
-      case "callAccepted":
-        this.onCallAccepted = callback;
-        break;
-      case "callRejected":
-        this.onCallRejected = callback;
-        break;
-      case "callEnded":
-        this.onCallEnded = callback;
-        break;
-      case "iceCandidate":
-        this.onIceCandidate = callback;
-        break;
-      case "offer":
-        this.onOffer = callback;
-        break;
-      case "answer":
-        this.onAnswer = callback;
-        break;
-      case "callUserOffline":
-        this.onCallUserOffline = callback;
-        break;
-      default:
-        console.warn(`⚠️ Unknown event: ${event}`);
+    if (!this.listeners[event]) {
+      console.warn(`⚠️ Unknown event: ${event}`);
+      return;
     }
+    // Allow removing listener by passing null
+    if (callback === null) {
+      this.listeners[event] = [];
+      return;
+    }
+    this.listeners[event].push(callback);
   }
 
   // Check if service is ready

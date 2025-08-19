@@ -3,6 +3,7 @@ import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
 import { formatMessageTime } from "../lib/utils";
 import VideoCallButton from "./VideoCallButton";
+import VoiceCallButton from "./VoiceCallButton";
 
 const ChatHeader = () => {
   const { selectedUser, setSelectedUser } = useChatStore();
@@ -77,7 +78,11 @@ const ChatHeader = () => {
 
         {/* Action buttons */}
         <div className="flex items-center gap-2">
-          {/* Video Call Button */}
+          {/* Voice and Video Call Buttons */}
+          <VoiceCallButton
+            selectedUser={selectedUser}
+            isUserOnline={isOnline}
+          />
           <VideoCallButton 
             selectedUser={selectedUser} 
             isUserOnline={isOnline} 
