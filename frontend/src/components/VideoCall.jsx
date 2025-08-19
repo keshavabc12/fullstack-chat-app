@@ -132,16 +132,10 @@ const VideoCall = ({ isOpen, onClose, selectedUser, onCallEnd, isIncomingCall = 
         console.log("🧊 ICE connection state:", peerConnection.iceConnectionState);
       };
 
-      // If this is an incoming call, wait for offer
-      // If this is an outgoing call, create and send offer
+      // If this is an incoming call, wait for offer.
+      // If this is an outgoing call, wait for acceptance before creating the offer.
       if (!isIncomingCall) {
-        console.log("📤 Creating and sending offer...");
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-        
-        // Send offer to remote peer via signaling server
-        videoCallService.sendOffer(selectedUser._id, offer);
-        console.log("✅ Offer sent successfully");
+        console.log("🔔 Outgoing call: waiting for acceptance before creating offer...");
       }
       
     } catch (error) {
@@ -193,9 +187,21 @@ const VideoCall = ({ isOpen, onClose, selectedUser, onCallEnd, isIncomingCall = 
     }
   };
 
-  const handleCallAccepted = (data) => {
+  const handleCallAccepted = async (data) => {
     console.log("✅ Call accepted by remote peer:", data);
-    // The call will be established through WebRTC signaling
+    // For outgoing calls, create and send offer after acceptance to avoid race conditions
+    try {
+      if (!isIncomingCall && peerConnectionRef.current) {
+        console.log("📤 Creating and sending offer after acceptance...");
+        const offer = await peerConnectionRef.current.createOffer();
+        await peerConnectionRef.current.setLocalDescription(offer);
+        videoCallService.sendOffer(selectedUser._id, offer);
+        console.log("✅ Offer sent successfully after acceptance");
+      }
+    } catch (error) {
+      console.error("❌ Failed to create/send offer after acceptance:", error);
+      toast.error("Failed to start call after acceptance");
+    }
   };
 
   const handleCallRejected = (data) => {

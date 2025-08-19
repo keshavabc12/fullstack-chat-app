@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Phone } from "lucide-react";
+import { Video as VideoIcon } from "lucide-react";
 import VideoCall from "./VideoCall";
 import videoCallService from "../lib/videoCallService";
 import { useAuthStore } from "../store/useAuthStore";
@@ -8,6 +8,8 @@ import toast from "react-hot-toast";
 const VideoCallButton = ({ selectedUser, isUserOnline }) => {
   const [isVideoCallOpen, setIsVideoCallOpen] = useState(false);
   const [isCallInProgress, setIsCallInProgress] = useState(false);
+  const [incomingCall, setIncomingCall] = useState(null);
+  const [isIncoming, setIsIncoming] = useState(false);
   
   const { socket } = useAuthStore();
 
@@ -20,6 +22,7 @@ const VideoCallButton = ({ selectedUser, isUserOnline }) => {
       videoCallService.on("callUserOffline", handleCallUserOffline);
       videoCallService.on("callAccepted", handleCallAccepted);
       videoCallService.on("callRejected", handleCallRejected);
+      videoCallService.on("callRequest", handleIncomingCall);
       
       return () => {
         videoCallService.cleanup();
@@ -92,6 +95,43 @@ const VideoCallButton = ({ selectedUser, isUserOnline }) => {
     toast.error("Call was rejected by the other user");
   };
 
+  const handleIncomingCall = (data) => {
+    // Only show incoming UI if the call is from the currently selected user
+    if (selectedUser && data.from === selectedUser._id) {
+      console.log("📞 Incoming call from:", selectedUser.fullName);
+      setIncomingCall(data);
+      setIsCallInProgress(true);
+      toast.success(`${selectedUser.fullName} is calling...`);
+    }
+  };
+
+  const acceptIncomingCall = () => {
+    if (!incomingCall) return;
+    try {
+      videoCallService.acceptCall(incomingCall);
+      setIsIncoming(true);
+      setIsVideoCallOpen(true);
+      setIncomingCall(null);
+      toast.success("Call accepted");
+    } catch (error) {
+      console.error("❌ Failed to accept call:", error);
+      toast.error("Failed to accept call");
+    }
+  };
+
+  const rejectIncomingCall = () => {
+    if (!incomingCall) return;
+    try {
+      videoCallService.rejectCall(incomingCall);
+      setIncomingCall(null);
+      setIsCallInProgress(false);
+      toast("Call rejected");
+    } catch (error) {
+      console.error("❌ Failed to reject call:", error);
+      toast.error("Failed to reject call");
+    }
+  };
+
   const handleCallEnd = () => {
     console.log("📞 Call ended");
     setIsVideoCallOpen(false);
@@ -105,6 +145,7 @@ const VideoCallButton = ({ selectedUser, isUserOnline }) => {
     }
     setIsVideoCallOpen(false);
     setIsCallInProgress(false);
+    setIsIncoming(false);
   };
 
   if (!selectedUser) return null;
@@ -128,8 +169,17 @@ const VideoCallButton = ({ selectedUser, isUserOnline }) => {
               : 'Start video call'
         }
       >
-        <Phone className="size-5" />
+        <VideoIcon className="size-5" />
       </button>
+
+      {/* Incoming Call Banner */}
+      {incomingCall && (
+        <div className="mt-2 p-2 bg-base-200 rounded-lg flex items-center gap-2">
+          <span className="text-sm">Incoming call from {selectedUser?.fullName}</span>
+          <button onClick={acceptIncomingCall} className="btn btn-xs btn-primary">Accept</button>
+          <button onClick={rejectIncomingCall} className="btn btn-xs btn-ghost">Reject</button>
+        </div>
+      )}
 
       {/* Video Call Modal */}
       <VideoCall
@@ -137,7 +187,7 @@ const VideoCallButton = ({ selectedUser, isUserOnline }) => {
         onClose={handleCloseCall}
         selectedUser={selectedUser}
         onCallEnd={handleCallEnd}
-        isIncomingCall={false}
+        isIncomingCall={isIncoming}
       />
     </>
   );
