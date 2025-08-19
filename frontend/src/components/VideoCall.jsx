@@ -15,6 +15,7 @@ const VideoCall = ({ isOpen, onClose, selectedUser, onCallEnd, isIncomingCall = 
   const remoteVideoRef = useRef(null);
   const localStreamRef = useRef(null);
   const peerConnectionRef = useRef(null);
+  const pendingIceCandidatesRef = useRef([]);
   
   const { authUser } = useAuthStore();
 
@@ -146,16 +147,45 @@ const VideoCall = ({ isOpen, onClose, selectedUser, onCallEnd, isIncomingCall = 
   };
 
   const handleIceCandidate = (data) => {
-    if (peerConnectionRef.current && data.from === selectedUser._id) {
-      console.log("🧊 Adding ICE candidate from remote peer");
-      peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(data.candidate))
-        .then(() => console.log("✅ ICE candidate added successfully"))
-        .catch(err => console.error("❌ Failed to add ICE candidate:", err));
+    const peerConnection = peerConnectionRef.current;
+    if (!peerConnection) return;
+    if (data?.from && data.from !== selectedUser._id) return;
+
+    const candidatePayload = data?.candidate ?? data;
+    if (!peerConnection.remoteDescription || !peerConnection.remoteDescription.type) {
+      console.log("🧊 Remote description not set yet. Queuing ICE candidate.");
+      pendingIceCandidatesRef.current.push(candidatePayload);
+      return;
+    }
+
+    console.log("🧊 Adding ICE candidate from remote peer");
+    peerConnection.addIceCandidate(new RTCIceCandidate(candidatePayload))
+      .then(() => console.log("✅ ICE candidate added successfully"))
+      .catch(err => console.error("❌ Failed to add ICE candidate:", err));
+  };
+
+  const flushPendingIceCandidates = async () => {
+    const peerConnection = peerConnectionRef.current;
+    if (!peerConnection) return;
+    if (!pendingIceCandidatesRef.current.length) return;
+
+    console.log(`🧊 Flushing ${pendingIceCandidatesRef.current.length} queued ICE candidate(s)`);
+    const queued = [...pendingIceCandidatesRef.current];
+    pendingIceCandidatesRef.current = [];
+    for (const candidate of queued) {
+      try {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+        console.log("✅ Queued ICE candidate added");
+      } catch (err) {
+        console.error("❌ Failed adding queued ICE candidate:", err);
+      }
     }
   };
 
   const handleOffer = async (data) => {
-    if (peerConnectionRef.current && data.from === selectedUser._id) {
+    if (!peerConnectionRef.current) return;
+    if (data?.from && data.from !== selectedUser._id) return;
+    if (peerConnectionRef.current) {
       try {
         console.log("📥 Received offer from remote peer");
         await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(data.offer));
@@ -168,6 +198,9 @@ const VideoCall = ({ isOpen, onClose, selectedUser, onCallEnd, isIncomingCall = 
         // Send answer to remote peer
         videoCallService.sendAnswer(selectedUser._id, answer);
         console.log("✅ Answer sent to remote peer");
+
+        // Now that remote description is set, flush any queued ICE candidates
+        await flushPendingIceCandidates();
       } catch (error) {
         console.error("❌ Failed to handle offer:", error);
         toast.error("Failed to establish call connection");
@@ -176,11 +209,16 @@ const VideoCall = ({ isOpen, onClose, selectedUser, onCallEnd, isIncomingCall = 
   };
 
   const handleAnswer = async (data) => {
-    if (peerConnectionRef.current && data.from === selectedUser._id) {
+    if (!peerConnectionRef.current) return;
+    if (data?.from && data.from !== selectedUser._id) return;
+    if (peerConnectionRef.current) {
       try {
         console.log("📥 Received answer from remote peer");
         await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(data.answer));
         console.log("✅ Remote description updated with answer");
+
+        // Flush any queued ICE candidates now that we have a remote description
+        await flushPendingIceCandidates();
       } catch (error) {
         console.error("❌ Failed to handle answer:", error);
       }
@@ -247,6 +285,7 @@ const VideoCall = ({ isOpen, onClose, selectedUser, onCallEnd, isIncomingCall = 
     
     setIsInCall(false);
     setCallStatus("connecting");
+    pendingIceCandidatesRef.current = [];
   };
 
   const toggleMute = () => {
